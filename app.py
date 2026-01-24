@@ -84,15 +84,10 @@ def login():
 
     return render_template("login.html")
 
-
 @app.route("/logout")
 def logout():
     session.clear()
     return redirect(url_for("login"))
-
-
-
-
 
 @app.route("/dashboard")
 def dashboard():
@@ -132,6 +127,19 @@ def dashboard():
         recent_missing=recent_missing,
         recent_found=recent_found
     )
+
+    return render_template(
+        "dashboard.html",
+        missing_count=missing_count,
+        found_count=found_count,
+        pending_count=pending_count,
+        match_count=match_count,
+        recent_missing=recent_missing,
+        recent_found=recent_found,
+        user_name=session.get("full_name"),
+        role=session.get("role")
+    )
+
 
 
 @app.route("/report-lost", methods=["GET", "POST"])

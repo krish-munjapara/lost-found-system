@@ -8,15 +8,47 @@
 
 <body>
 
-
 <div class="topbar">
   <div class="topbar-left">
     <img src="/static/images/logo.png" class="logo">
     <span class="project-name">Lost & Found Child Detection System</span>
   </div>
 
-  <div class="topbar-right">
-    <button class="icon-btn" title="Notifications">🔔</button>
+<div class="topbar-right">
+{% if role == 'user' %}
+<div class="user-profile">
+  <div class="avatar">👤</div>
+  <span class="user-name">{{ user_name }}</span>
+</div>
+{% endif %}
+
+  
+  <div class="notification-wrapper">
+    <button class="icon-btn" onclick="toggleNotif()">🔔</button>
+
+    <div class="notif-menu" id="notifMenu">
+      <p>🧒 New missing child reported</p>
+      <p>🤖 AI match found (92%)</p>
+      <p>⏳ 3 reports pending verification</p>
+    </div>
+  </div>
+
+<script>
+function toggleNotif() {
+  const menu = document.getElementById("notifMenu");
+  menu.style.display = menu.style.display === "block" ? "none" : "block";
+}
+
+
+document.addEventListener("click", function (e) {
+  const wrapper = document.querySelector(".notification-wrapper");
+  if (!wrapper.contains(e.target)) {
+    document.getElementById("notifMenu").style.display = "none";
+  }
+});
+</script>
+
+        
 
     <div class="settings-wrapper">
       <button class="icon-btn" onclick="toggleSettings()">⚙️</button>
@@ -28,12 +60,6 @@
     </div>
   </div>
 </div>
-<script>
-function toggleNotif(){
-  const menu = document.getElementById("notifMenu");
-  menu.style.display = menu.style.display === "block" ? "none" : "block";
-}
-</script>
 
 <script>
 function toggleSettings(){
@@ -54,9 +80,6 @@ document.addEventListener("click", function(e){
 </script>
 
 
-
-
-
 <div class="layout">
 
   
@@ -69,15 +92,20 @@ document.addEventListener("click", function(e){
         <a href="/missing-children">🧒 Missing Children</a>
         <a href="/report-found">📍 Report Found Child</a>
         <a href="/found-children">📍 Found Children</a>
-        <a href="/matches">🤖 Matches</a>
+        <a href="/matches">🤖 Matches</a>  
     </nav>
-</div>
+<div class="user">
+            <div class="avatar"></div>
+            <div>
+                <strong>User</strong><br>
+                <small>Admin</small>
+            </div>
+        </div>
+    </div>
 
 
- 
     <div class="main">
-
-        
+ 
         <div class="intro-card">
             <h2>👋 Welcome to Lost & Found System</h2>
             <p>

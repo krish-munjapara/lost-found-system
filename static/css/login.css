@@ -21,7 +21,7 @@
 
 .right-box {
     width: 50%;
-    background: #ffffff;
+    background: #0f172a;
     display: flex;
     flex-direction: column;
     position: relative;
@@ -41,7 +41,7 @@
 .project-name {
     font-size: 18px;
     font-weight: 600;
-    color: #020617;
+    color: #f9f9fb;
 }
 
 
@@ -49,7 +49,7 @@
     width: 380px;
     background: #ffffff;
     margin: auto;
-    padding: 32px;
+    padding: 22px;
     border-radius: 18px;
     box-shadow: 0 20px 40px rgba(0,0,0,0.15);
     text-align: center;
@@ -136,14 +136,14 @@
     position: absolute;
     bottom: 20px;
     right: 20px;
-    color: #020617;
+    color: #f9f9fa;
     cursor: pointer;
     font-size: 14px;
 }
 
 .lang-menu {
     display: none;
-    background: white;
+    background: rgb(248, 246, 246);
     border-radius: 8px;
     margin-top: 6px;
     box-shadow: 0 10px 20px rgba(0,0,0,0.15);
@@ -159,7 +159,7 @@
 }
 
 .lang-menu div:hover {
-    background: #e5e7eb;
+    background: #010918;
 }
 
 
