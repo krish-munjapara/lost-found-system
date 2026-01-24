@@ -29,7 +29,7 @@ h1 {
     gap: 25px;
 }
 
-/* MATCH CARD */
+
 .match-card {
     background: #ffffff;
     border-radius: 20px;
@@ -40,7 +40,7 @@ h1 {
     box-shadow: 0 12px 25px rgba(0,0,0,0.1);
 }
 
-/* PERSON */
+
 .person {
     text-align: center;
     width: 170px;
@@ -59,7 +59,7 @@ h1 {
     font-weight: 600;
 }
 
-/* MATCH INFO */
+
 .match-info {
     width: 40%;
     text-align: center;
@@ -69,7 +69,7 @@ h1 {
     margin-bottom: 12px;
 }
 
-/* PROGRESS BAR */
+
 .progress-bar {
     background: #e5e7eb;
     height: 26px;
@@ -98,7 +98,7 @@ h1 {
     background: linear-gradient(90deg, #dc2626, #ef4444);
 }
 
-/* CONFIDENCE */
+
 .confidence {
     display: inline-block;
     margin-top: 10px;
@@ -123,16 +123,16 @@ h1 {
     color: #64748b;
 }
 
-/* PAGE HEADER FIX */
+
 .page-header {
-  display: flex !important;              /* force flex */
+  display: flex !important;             
   align-items: center !important;
   justify-content: space-between !important;
   gap: 20px;
   margin-bottom: 30px;
 }
 
-/* LEFT SIDE */
+
 .page-header-left h1 {
   margin: 0;
   font-size: 30px;
@@ -145,9 +145,9 @@ h1 {
   font-size: 15px;
 }
 
-/* RIGHT SIDE */
+
 .page-header-right {
-  flex-shrink: 0;                         /* prevent wrapping */
+  flex-shrink: 0;                         
 }
 
 .back-btn {

@@ -27,13 +27,13 @@
         {% for m in matches %}
         <div class="match-card">
 
-            <!-- Missing Child -->
+            
             <div class="person">
                 <img src="{{ url_for('static', filename='uploads/lost/' + m.missing.image) }}">
                 <p>{{ m.missing.name }}</p>
             </div>
 
-            <!-- Match Info -->
+          
             <div class="match-info">
                 <h3>Match Accuracy</h3>
 
@@ -49,7 +49,7 @@
                 </span>
             </div>
 
-            <!-- Found Child -->
+            
             <div class="person">
                 <img src="{{ url_for('static', filename='uploads/found/' + m.found.image) }}">
                 <p>{{ m.found.name or 'Unknown' }}</p>

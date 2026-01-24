@@ -1,19 +1,20 @@
 from image_matcher import image_similarity
 import os
 
+
+
 print("RUNNING THIS FILE:", __file__)
 
-# ================= FLASK IMPORTS =================
+
 from flask import Flask, render_template, request, redirect, url_for, session
 import mysql.connector
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash
 
-# ================= APP INIT =================
-app = Flask(__name__)
-app.secret_key = "supersecretkey"   # REQUIRED for session
 
-# ================= UPLOAD PATHS =================
+app = Flask(__name__)
+app.secret_key = "supersecretkey"   
+
 UPLOAD_BASE = "static/uploads"
 LOST_PATH = os.path.join(UPLOAD_BASE, "lost")
 FOUND_PATH = os.path.join(UPLOAD_BASE, "found")
@@ -24,21 +25,20 @@ os.makedirs(FOUND_PATH, exist_ok=True)
 app.config["LOST_FOLDER"] = LOST_PATH
 app.config["FOUND_FOLDER"] = FOUND_PATH
 
-# ================= DB CONNECTION =================
 def get_db():
     return mysql.connector.connect(
         host="localhost",
         user="root",
-        password="root",   # change if needed
+        password="root",   
         database="lostfound"
     )
 
-# ================= HOME =================
+
 @app.route("/")
 def home():
     return redirect("/login")
 
-# ================= REGISTER =================
+
 @app.route("/register", methods=["GET", "POST"])
 def register():
     if request.method == "POST":
@@ -75,22 +75,25 @@ def register():
 
     return render_template("register.html")
 
-# ================= LOGIN =================
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        session["user"] = request.form["email"]  # ✅ session set
+        session["user"] = request.form["email"]  
         return redirect("/dashboard")
 
     return render_template("login.html")
 
-# ================= LOGOUT =================
+
 @app.route("/logout")
 def logout():
     session.clear()
     return redirect(url_for("login"))
 
-# ================= DASHBOARD =================
+
+
+
+
 @app.route("/dashboard")
 def dashboard():
     if "user" not in session:
@@ -130,7 +133,7 @@ def dashboard():
         recent_found=recent_found
     )
 
-# ================= REPORT MISSING =================
+
 @app.route("/report-lost", methods=["GET", "POST"])
 def report_lost():
     if request.method == "POST":
@@ -167,7 +170,6 @@ def report_lost():
 
     return render_template("report_lost.html")
 
-# ================= MISSING LIST =================
 @app.route("/missing-children")
 def missing_children():
     db = get_db()
@@ -181,7 +183,7 @@ def missing_children():
 
     return render_template("missing_children.html", children=data)
 
-# ================= REPORT FOUND =================
+
 @app.route("/report-found", methods=["GET", "POST"])
 def report_found():
     if request.method == "POST":
@@ -213,7 +215,6 @@ def report_found():
 
     return render_template("report_found.html")
 
-# ================= FOUND LIST =================
 @app.route("/found-children")
 def found_children():
     db = get_db()
@@ -227,7 +228,7 @@ def found_children():
 
     return render_template("found_children.html", data=data)
 
-# ================= MATCHES =================
+
 @app.route("/matches")
 def matches():
     db = get_db()
@@ -256,6 +257,9 @@ def matches():
                 )
                 db.commit()
 
+                cur2 = db.cursor()
+
+
                 match_results.append({
                     "missing": m,
                     "found": f,
@@ -267,11 +271,14 @@ def matches():
 
     return render_template("matches.html", matches=match_results)
 
-# ================= TEST =================
+
 @app.route("/test")
 def test():
     return "FLASK ROUTES WORKING"
 
-# ================= RUN =================
+
+
+
+
 if __name__ == "__main__":
     app.run(debug=True)

@@ -18,19 +18,19 @@
     {% for child in data %}
     <div class="list-card">
 
-        <!-- CHILD PHOTO -->
+        
         <img
           src="{{ url_for('static', filename='uploads/found/' ~ child.image) }}"
           class="avatar-img"
         >
 
-        <!-- INFO -->
+       
         <div class="info">
             <strong>{{ child.name or "Unknown Child" }}</strong>
             <small>{{ child.location }}</small>
         </div>
 
-        <!-- STATUS -->
+        
         <span class="status active">Active</span>
     </div>
     {% else %}

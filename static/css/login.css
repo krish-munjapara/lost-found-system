@@ -1,4 +1,4 @@
-/* ================= RESET ================= */
+
 * {
     margin: 0;
     padding: 0;
@@ -6,21 +6,19 @@
     font-family: "Segoe UI", Arial, sans-serif;
 }
 
-/* ================= PAGE LAYOUT ================= */
 .page-wrapper {
     display: flex;
     height: 100vh;
     width: 100%;
 }
 
-/* ================= LEFT IMAGE ================= */
 .left-image {
     width: 50%;
     background: url("../images/login-left.jpg") no-repeat center;
     background-size: cover;
 }
 
-/* ================= RIGHT SIDE ================= */
+
 .right-box {
     width: 50%;
     background: #ffffff;
@@ -29,7 +27,6 @@
     position: relative;
 }
 
-/* ================= HEADER ================= */
 .top-header {
     display: flex;
     align-items: center;
@@ -47,7 +44,7 @@
     color: #020617;
 }
 
-/* ================= AUTH CARD ================= */
+
 .login-card {
     width: 380px;
     background: #ffffff;
@@ -58,7 +55,7 @@
     text-align: center;
 }
 
-/* ================= TITLES ================= */
+
 .login-card h2 {
     font-size: 26px;
     margin-bottom: 6px;
@@ -71,7 +68,7 @@
     font-size: 14px;
 }
 
-/* ================= INPUTS ================= */
+
 .login-card input,
 .login-card select {
     width: 100%;
@@ -88,7 +85,7 @@
     border-color: #2563eb;
 }
 
-/* ================= PRIMARY BUTTON ================= */
+
 .login-btn {
     width: 100%;
     padding: 12px;
@@ -105,7 +102,7 @@
     background: #1d4ed8;
 }
 
-/* ================= LOCATION BUTTON ================= */
+
 .google-btn {
     width: 100%;
     padding: 12px;
@@ -122,7 +119,7 @@
     background: #059669;
 }
 
-/* ================= SWITCH LINK ================= */
+
 .switch {
     margin-top: 16px;
     font-size: 14px;
@@ -134,7 +131,7 @@
     font-weight: 600;
 }
 
-/* ================= LANGUAGE DROPDOWN ================= */
+
 .lang-dropdown {
     position: absolute;
     bottom: 20px;
@@ -165,7 +162,7 @@
     background: #e5e7eb;
 }
 
-/* ================= RESPONSIVE ================= */
+
 @media (max-width: 900px) {
     .left-image {
         display: none;

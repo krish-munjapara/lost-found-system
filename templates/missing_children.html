@@ -19,19 +19,19 @@
     {% for child in children %}
     <div class="list-card">
 
-        <!-- CHILD PHOTO -->
+       
         <img
           src="{{ url_for('static', filename='uploads/lost/' ~ child.image) }}"
           class="avatar-img"
         >
 
-        <!-- INFO -->
+       
         <div class="info">
             <strong>{{ child.name }} ({{ child.age }} yrs)</strong>
             <small>{{ child.location }}</small>
         </div>
 
-        <!-- STATUS -->
+      
         <span class="status pending">Pending</span>
     </div>
     {% else %}

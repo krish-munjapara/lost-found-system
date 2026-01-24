@@ -1,4 +1,4 @@
-/* ================= GLOBAL ================= */
+
 * {
   margin: 0;
   padding: 0;
@@ -11,7 +11,7 @@ body {
   overflow-x: hidden;
 }
 
-/* ================= TOP BAR ================= */
+
 .topbar {
   height: 60px;
   background: #f8fafc;
@@ -21,14 +21,14 @@ body {
   padding: 0 20px;
   border-bottom: 1px solid #e5e7eb;
 
-  position: fixed;        /* ✅ FIXED HEADER */
+  position: fixed;        
   top: 0;
   left: 0;
   right: 0;
   z-index: 1000;
 }
 
-/* LEFT */
+
 .topbar-left {
   display: flex;
   align-items: center;
@@ -44,19 +44,19 @@ body {
   font-size: 16px;
   font-weight: 600;
   white-space: nowrap;
-  line-height: 1;        /* ✅ TEXT ALIGN FIX */
+  line-height: 1;        
   position: relative;
   top: -1px;
 }
 
-/* RIGHT */
+
 .topbar-right {
   display: flex;
   align-items: center;
   gap: 12px;
 }
 
-/* ICON BUTTON */
+
 .icon-btn {
   width: 36px;
   height: 36px;
@@ -95,7 +95,7 @@ body {
 }
 
 
-/* SETTINGS */
+
 .settings-wrapper {
   position: relative;
 }
@@ -128,7 +128,7 @@ body {
   color: white;
 }
 
-/* DARK MODE */
+
 body.dark {
   background: #020617;
   color: white;
@@ -154,14 +154,13 @@ body.dark .settings-menu a {
   color: white;
 }
 
-/* ================= LAYOUT ================= */
+
 .layout {
   display: flex;
-  margin-top: 60px;                 /* ✅ EXACT HEADER OFFSET */
+  margin-top: 60px;                
   min-height: calc(100vh - 60px);
 }
 
-/* ================= SIDEBAR ================= */
 .sidebar {
   width: 260px;
   background: #0f172a;
@@ -202,13 +201,13 @@ nav a:hover {
   color: white;
 }
 
-/* ================= MAIN ================= */
+
 .main {
   flex: 1;
-  padding: 24px;      /* ✅ TIGHTER, CLEAN */
+  padding: 24px;      
 }
 
-/* ================= INTRO CARD ================= */
+
 .intro-card {
   background: linear-gradient(135deg, #2563eb, #1e40af);
   color: white;
@@ -229,7 +228,7 @@ nav a:hover {
   opacity: 0.95;
 }
 
-/* ================= HEADER ================= */
+
 .header h1 {
   font-size: 28px;
 }
@@ -239,7 +238,7 @@ nav a:hover {
   margin-top: 6px;
 }
 
-/* ================= STATS ================= */
+
 .stats {
   margin-top: 30px;
   display: grid;
@@ -272,7 +271,7 @@ nav a:hover {
 .green { background: #dcfce7; }
 .orange { background: #ffedd5; }
 
-/* ================= LISTS ================= */
+
 .lists {
   margin-top: 30px;
   display: grid;
@@ -298,7 +297,6 @@ nav a:hover {
   margin-bottom: 15px;
 }
 
-/* IMAGE AVATAR */
 .avatar-img {
   width: 48px;
   height: 48px;
@@ -311,7 +309,7 @@ nav a:hover {
   color: #64748b;
 }
 
-/* STATUS TAGS */
+
 .tag {
   margin-left: auto;
   padding: 6px 12px;
@@ -323,7 +321,7 @@ nav a:hover {
 .verified { background: #dcfce7; color: #166534; }
 .active { background: #fee2e2; color: #991b1b; }
 
-/* ================= RESPONSIVE ================= */
+
 @media (max-width: 900px) {
   .lists {
     grid-template-columns: 1fr;
