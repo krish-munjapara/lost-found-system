@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>AI Matches | Lost & Found</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/matches.css') }}">
+</head>
+<body>
+
+<div class="page-header">
+  <div class="page-header-left">
+    <h1>🤖 AI Match Results</h1>
+    <p>Potential matches identified using image similarity</p>
+  </div>
+
+  <div class="page-header-right">
+    <a href="/dashboard" class="back-btn">
+      ← Back to Dashboard
+    </a>
+  </div>
+</div>
+
+
+    <div class="match-list">
+
+        {% if matches %}
+        {% for m in matches %}
+        <div class="match-card">
+
+            <!-- Missing Child -->
+            <div class="person">
+                <img src="{{ url_for('static', filename='uploads/lost/' + m.missing.image) }}">
+                <p>{{ m.missing.name }}</p>
+            </div>
+
+            <!-- Match Info -->
+            <div class="match-info">
+                <h3>Match Accuracy</h3>
+
+                <div class="progress-bar">
+                    <div class="progress {{ 'high' if m.score >= 75 else 'medium' if m.score >= 50 else 'low' }}"
+                         style="width: {{ m.score }}%">
+                        {{ m.score }}%
+                    </div>
+                </div>
+
+                <span class="confidence {{ 'high' if m.score >= 75 else 'medium' if m.score >= 50 else 'low' }}">
+                    {{ 'High' if m.score >= 75 else 'Medium' if m.score >= 50 else 'Low' }} Confidence
+                </span>
+            </div>
+
+            <!-- Found Child -->
+            <div class="person">
+                <img src="{{ url_for('static', filename='uploads/found/' + m.found.image) }}">
+                <p>{{ m.found.name or 'Unknown' }}</p>
+            </div>
+
+        </div>
+        {% endfor %}
+        {% else %}
+            <p class="no-data">No matches found yet.</p>
+        {% endif %}
+
+    </div>
+</div>
+
+</body>
+</html>

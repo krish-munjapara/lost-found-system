@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Login | Lost & Found</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
+</head>
+<body>
+
+<div class="page-wrapper">
+
+  <div class="left-image"></div>
+
+  <div class="right-box">
+
+    <div class="top-header">
+      <img src="{{ url_for('static', filename='images/logo.png') }}" class="logo">
+      <span class="project-name">Lost & Found Child Detection System</span>
+    </div>
+
+    <div class="login-card">
+      <h2>Login</h2>
+      <p class="subtitle">Secure access to your dashboard</p>
+
+      <form method="POST" action="/login">
+        <input type="email" name="email" placeholder="Email" required>
+        <input type="password" name="password" placeholder="Password" required>
+        <button type="submit" class="login-btn">Login</button>
+      </form>
+
+      <p class="switch">
+        New user? <a href="{{ url_for('register') }}">Register</a>
+      </p>
+    </div>
+
+    <div class="lang-dropdown">
+      🌐 Language
+      <div class="lang-menu">
+        <div>English</div>
+        <div>Hindi</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>

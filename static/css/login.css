@@ -1,0 +1,181 @@
+/* ================= RESET ================= */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: "Segoe UI", Arial, sans-serif;
+}
+
+/* ================= PAGE LAYOUT ================= */
+.page-wrapper {
+    display: flex;
+    height: 100vh;
+    width: 100%;
+}
+
+/* ================= LEFT IMAGE ================= */
+.left-image {
+    width: 50%;
+    background: url("../images/login-left.jpg") no-repeat center;
+    background-size: cover;
+}
+
+/* ================= RIGHT SIDE ================= */
+.right-box {
+    width: 50%;
+    background: #ffffff;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+}
+
+/* ================= HEADER ================= */
+.top-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 20px 30px;
+}
+
+.logo {
+    width: 38px;
+}
+
+.project-name {
+    font-size: 18px;
+    font-weight: 600;
+    color: #020617;
+}
+
+/* ================= AUTH CARD ================= */
+.login-card {
+    width: 380px;
+    background: #ffffff;
+    margin: auto;
+    padding: 32px;
+    border-radius: 18px;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+    text-align: center;
+}
+
+/* ================= TITLES ================= */
+.login-card h2 {
+    font-size: 26px;
+    margin-bottom: 6px;
+    color: #020617;
+}
+
+.subtitle {
+    color: #64748b;
+    margin-bottom: 22px;
+    font-size: 14px;
+}
+
+/* ================= INPUTS ================= */
+.login-card input,
+.login-card select {
+    width: 100%;
+    padding: 12px;
+    margin-bottom: 14px;
+    border-radius: 10px;
+    border: 1px solid #c7d2fe;
+    font-size: 14px;
+    outline: none;
+}
+
+.login-card input:focus,
+.login-card select:focus {
+    border-color: #2563eb;
+}
+
+/* ================= PRIMARY BUTTON ================= */
+.login-btn {
+    width: 100%;
+    padding: 12px;
+    background: #2563eb;
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.login-btn:hover {
+    background: #1d4ed8;
+}
+
+/* ================= LOCATION BUTTON ================= */
+.google-btn {
+    width: 100%;
+    padding: 12px;
+    background: #10b981;
+    color: white;
+    border: none;
+    border-radius: 10px;
+    margin-bottom: 14px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.google-btn:hover {
+    background: #059669;
+}
+
+/* ================= SWITCH LINK ================= */
+.switch {
+    margin-top: 16px;
+    font-size: 14px;
+}
+
+.switch a {
+    color: #2563eb;
+    text-decoration: none;
+    font-weight: 600;
+}
+
+/* ================= LANGUAGE DROPDOWN ================= */
+.lang-dropdown {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    color: #020617;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.lang-menu {
+    display: none;
+    background: white;
+    border-radius: 8px;
+    margin-top: 6px;
+    box-shadow: 0 10px 20px rgba(0,0,0,0.15);
+    overflow: hidden;
+}
+
+.lang-dropdown:hover .lang-menu {
+    display: block;
+}
+
+.lang-menu div {
+    padding: 10px 14px;
+}
+
+.lang-menu div:hover {
+    background: #e5e7eb;
+}
+
+/* ================= RESPONSIVE ================= */
+@media (max-width: 900px) {
+    .left-image {
+        display: none;
+    }
+
+    .right-box {
+        width: 100%;
+    }
+
+    .login-card {
+        width: 90%;
+    }
+}
