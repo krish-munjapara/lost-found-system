@@ -1,9 +1,9 @@
-import mysql.connector
+from pymongo import MongoClient
 
 def get_connection():
-    return mysql.connector.connect(
-        host="localhost",
-        user="root",
-        password="root",      
-        database="lostfound"
-    )
+    client = MongoClient("mongodb://localhost:27017/")
+    return client["lostfound"]
+
+def get_db():
+    client = MongoClient("mongodb://localhost:27017/")
+    return client["lostfound"]
