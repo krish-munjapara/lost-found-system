@@ -8,7 +8,7 @@ import os
 # ──────────────────────────────────────────────
 # Database
 # ──────────────────────────────────────────────
-MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017/")
+MONGO_URI = os.getenv("MONGO_URI", "mongodb+srv://munjaparakrish25:<Krish123>@guardian-link.ffn1qkp.mongodb.net/?appName=guardian-link")
 DATABASE_NAME = os.getenv("DB_NAME", "guardian_link")
 
 # ──────────────────────────────────────────────

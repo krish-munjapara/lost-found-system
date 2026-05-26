@@ -63,7 +63,7 @@ Guardian-Link/
 ### Prerequisites
 - **Node.js** v18+
 - **Python** 3.10+
-- **MongoDB** running on localhost:27017
+- **MongoDB** running on mongodb+srv://munjaparakrish25:<Krish123>@guardian-link.ffn1qkp.mongodb.net/?appName=guardian-link
 
 ### Backend Setup
 
