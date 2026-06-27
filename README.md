@@ -156,4 +156,4 @@ This project is developed for academic purposes (Final Year Project).
 
 ---
 
-**Made with ❤️ by Krish**
+**Made with ❤️ by Krish,Shaurya,Suraj,Raj**
