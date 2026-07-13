@@ -3,7 +3,6 @@ Guardian-Link Auth Routes
 """
 
 from fastapi import APIRouter, HTTPException, Depends, status
-from passlib.context import CryptContext
 
 from app.database import get_db
 from app.models.user_model import (
@@ -12,6 +11,7 @@ from app.models.user_model import (
     RefreshTokenRequest, ChangePasswordRequest,
 )
 from app.utils import get_timestamp, serialize_doc
+from app.utils.passwords import hash_password, verify_password
 from app.utils.tokens import (
     create_access_token, create_refresh_token, verify_refresh_token,
     revoke_refresh_token, revoke_all_refresh_tokens,
@@ -22,7 +22,6 @@ from app.services.email_service import send_password_reset_email, send_verificat
 from app.dependencies import get_current_user
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def _default_preferences():
@@ -52,7 +51,7 @@ async def register(user: UserRegister):
     user_doc = {
         "full_name": user.full_name,
         "email": user.email,
-        "password": pwd_context.hash(user.password[:72]),
+        "password": hash_password(user.password),
         "mobile": user.mobile,
         "gender": user.gender,
         "address": user.address,
@@ -68,13 +67,20 @@ async def register(user: UserRegister):
 
     return {"success": True, "message": "Registered successfully. Please verify your email."}
 
-
 @router.post("/login", response_model=TokenResponse)
 async def login(credentials: UserLogin):
     db = get_db()
+
     user = await db.users.find_one({"email": credentials.email})
-    if not user or not pwd_context.verify(credentials.password[:72], user["password"]):
+
+    if not user:
         raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    password = credentials.password
+
+    if not verify_password(password, user["password"]):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+
     return await _build_token_response(user)
 
 
@@ -115,7 +121,7 @@ async def reset_password(body: ResetPasswordRequest):
     db = get_db()
     await db.users.update_one(
         {"email": email},
-        {"$set": {"password": pwd_context.hash(body.new_password[:72])}},
+        {"$set": {"password": hash_password(body.new_password)}},
     )
     await consume_password_reset_token(body.token)
     await revoke_all_refresh_tokens(email)
@@ -126,11 +132,11 @@ async def reset_password(body: ResetPasswordRequest):
 async def change_password(body: ChangePasswordRequest, current_user: dict = Depends(get_current_user)):
     db = get_db()
     user = await db.users.find_one({"email": current_user["email"]})
-    if not user or not pwd_context.verify(body.current_password[:72], user["password"]):
+    if not user or not verify_password(body.current_password, user["password"]):
         raise HTTPException(status_code=400, detail="Current password is incorrect")
     await db.users.update_one(
         {"email": current_user["email"]},
-        {"$set": {"password": pwd_context.hash(body.new_password[:72])}},
+        {"$set": {"password": hash_password(body.new_password)}},
     )
     await revoke_all_refresh_tokens(current_user["email"])
     return {"success": True, "message": "Password changed successfully"}

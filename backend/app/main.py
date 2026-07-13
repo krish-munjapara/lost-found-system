@@ -7,7 +7,6 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from passlib.context import CryptContext
 
 from app.database import connect_db, close_db, get_db
 from app.database.indexes import ensure_indexes
@@ -21,15 +20,17 @@ from app.config import (
 )
 from app.utils import get_timestamp
 from app.utils.errors import register_exception_handlers
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+from app.utils.passwords import hash_password
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await connect_db()
     await ensure_indexes()
-    await create_default_admin()
+    try:
+        await create_default_admin()
+    except Exception as exc:
+        print(f"⚠️ Default admin initialization failed: {exc}")
     print(f"🚀 {APP_NAME} v{APP_VERSION} is ready!")
     yield
     await close_db()
@@ -37,12 +38,15 @@ async def lifespan(app: FastAPI):
 
 async def create_default_admin():
     db = get_db()
+    if db is None:
+        raise RuntimeError("Database connection is not available")
+
     existing = await db.users.find_one({"email": DEFAULT_ADMIN_EMAIL})
     if not existing:
         await db.users.insert_one({
             "full_name": DEFAULT_ADMIN_NAME,
             "email": DEFAULT_ADMIN_EMAIL,
-            "password": pwd_context.hash(DEFAULT_ADMIN_PASSWORD),
+            "password": hash_password(DEFAULT_ADMIN_PASSWORD),
             "mobile": "0000000000",
             "gender": "Other",
             "address": "System",

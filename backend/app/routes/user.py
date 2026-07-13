@@ -3,17 +3,16 @@ Guardian-Link User Routes
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from passlib.context import CryptContext
 
 from app.database import get_db
 from app.models.user_model import UserUpdate, ChangePasswordRequest, NotificationPreferences
 from app.utils import serialize_doc, get_timestamp
+from app.utils.passwords import hash_password, verify_password
 from app.utils.tokens import revoke_all_refresh_tokens
 from app.dependencies import get_current_user
 from app.services.audit_service import log_action
 
 router = APIRouter(prefix="/api/user", tags=["User"])
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 PRIVATE_CHILD_PROJECTION = {"encoding": 0}
 
@@ -40,11 +39,11 @@ async def update_profile(updates: UserUpdate, current_user: dict = Depends(get_c
 async def change_password(body: ChangePasswordRequest, current_user: dict = Depends(get_current_user)):
     db = get_db()
     user = await db.users.find_one({"email": current_user["email"]})
-    if not user or not pwd_context.verify(body.current_password[:72], user["password"]):
+    if not user or not verify_password(body.current_password, user["password"]):
         raise HTTPException(status_code=400, detail="Current password is incorrect")
     await db.users.update_one(
         {"email": current_user["email"]},
-        {"$set": {"password": pwd_context.hash(body.new_password[:72])}},
+        {"$set": {"password": hash_password(body.new_password)}},
     )
     await revoke_all_refresh_tokens(current_user["email"])
     await log_action(current_user["email"], "password_changed", "user", current_user.get("id"))
