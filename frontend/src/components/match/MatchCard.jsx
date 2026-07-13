@@ -6,7 +6,7 @@
 import React from 'react';
 import { User, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { adminApi, getImageUrl } from '../../services/api';
+import { adminApi, childrenApi, getImageUrl } from '../../services/api';
 
 const MatchCard = ({ match, index = 0, onStatusChange }) => {
   const {
@@ -50,18 +50,12 @@ const MatchCard = ({ match, index = 0, onStatusChange }) => {
       if (missing || found) return;
       if (!effectiveMissingId && !effectiveFoundId) return;
 
-      const token = localStorage.getItem('token');
-      if (!token) return;
-
       try {
-        const headers = { Authorization: `Bearer ${token}` };
-        const [missingResponse, foundResponse] = await Promise.all([
-          fetch('/api/children/missing', { headers }),
-          fetch('/api/children/found', { headers }),
+        const [missingPayload, foundPayload] = await Promise.all([
+          childrenApi.getMissing(),
+          childrenApi.getFound(),
         ]);
 
-        const missingPayload = await missingResponse.json();
-        const foundPayload = await foundResponse.json();
         const missingList = Array.isArray(missingPayload) ? missingPayload : missingPayload?.children || missingPayload?.matches || [];
         const foundList = Array.isArray(foundPayload) ? foundPayload : foundPayload?.children || foundPayload?.matches || [];
 

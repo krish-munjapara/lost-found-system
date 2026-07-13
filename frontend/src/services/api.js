@@ -4,7 +4,18 @@
 
 import { buildRegisterPayload, validateRegisterPayload } from '../utils/registerValidation';
 
-const API_BASE = '/api';
+const API_BASE = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api').replace(/\/$/, '');
+const getUploadsBaseUrl = () => {
+  if (!API_BASE) return '';
+  if (/^https?:\/\//i.test(API_BASE)) {
+    const normalizedBase = API_BASE.replace(/\/api$/i, '');
+    if (normalizedBase.includes('localhost') || normalizedBase.includes('127.0.0.1')) {
+      return '';
+    }
+    return normalizedBase;
+  }
+  return '';
+};
 
 const getToken = () => localStorage.getItem('token');
 const getRefreshToken = () => localStorage.getItem('refresh_token');
@@ -123,9 +134,27 @@ const authFetch = async (url, options = {}, retried = false) => {
 };
 
 export const getImageUrl = (image, folder = 'lost', imageUrl = null) => {
-  if (imageUrl && imageUrl.startsWith('http')) return imageUrl;
+  if (!image && !imageUrl) return null;
+
+  if (imageUrl) {
+    if (imageUrl.startsWith('http')) return imageUrl;
+    if (imageUrl.startsWith('/')) return imageUrl;
+  }
+
   if (!image) return null;
-  return `/uploads/${folder}/${image}`;
+  if (image.startsWith('http')) return image;
+
+  const normalizedImage = image.replace(/^\/+/, '');
+  const normalizedFolder = folder.replace(/^\/+/, '');
+  const uploadsBaseUrl = getUploadsBaseUrl();
+
+  if (normalizedImage.startsWith('uploads/')) {
+    return uploadsBaseUrl ? `${uploadsBaseUrl}/${normalizedImage}` : `/${normalizedImage}`;
+  }
+
+  return uploadsBaseUrl
+    ? `${uploadsBaseUrl}/uploads/${normalizedFolder}/${normalizedImage}`
+    : `/uploads/${normalizedFolder}/${normalizedImage}`;
 };
 
 export const authApi = {
@@ -291,7 +320,10 @@ export const publicApi = {
 };
 
 export const shareUtils = {
-  getShareUrl: (childId) => `${window.location.origin}/public-feed?highlight=${childId}`,
+  getShareUrl: (childId) => {
+    const origin = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : '';
+    return `${origin}/public-feed?highlight=${childId}`.replace(/^\//, '/');
+  },
   shareWhatsApp: (child) => {
     const text = `🚨 MISSING CHILD: ${child.name}, Age ${child.age} — ${child.location}\n${shareUtils.getShareUrl(child.id)}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
