@@ -133,7 +133,10 @@ const Login = () => {
             </div>
 
             <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-slate-900" htmlFor="login-password">Password</label>
+              <div className="flex justify-between items-center">
+                <label className="text-sm font-medium text-slate-900" htmlFor="login-password">Password</label>
+                <Link to="/forgot-password" className="text-xs text-blue-600 hover:underline">Forgot password?</Link>
+              </div>
               <input
                 type="password" id="login-password" value={password}
                 onChange={(e) => setPassword(e.target.value)}

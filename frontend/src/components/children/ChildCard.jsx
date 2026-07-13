@@ -7,6 +7,7 @@
 import React, { useState } from 'react';
 import { User, MapPin, Clock, ChevronRight, Share2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { getImageUrl } from '../../services/api';
 import ShareModal from '../common/ShareModal';
 
 const ChildCard = ({ child, type = 'missing', index = 0 }) => {
@@ -32,7 +33,7 @@ const ChildCard = ({ child, type = 'missing', index = 0 }) => {
         <div className="aspect-[4/3] bg-slate-100 relative overflow-hidden">
           {child.image ? (
             <img
-              src={type === 'missing' ? `/uploads/lost/${child.image}` : `/uploads/found/${child.image}`}
+              src={getImageUrl(child.image, type === 'missing' ? 'lost' : 'found', child.image_url)}
               alt={child.name}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
             />

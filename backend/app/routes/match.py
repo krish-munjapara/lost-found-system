@@ -19,7 +19,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from bson import ObjectId
 from app.database import get_db
 from app.utils import serialize_doc, get_timestamp
-from app.services import get_confidence_level
+from app.services.audit_service import log_action
+from app.services.email_service import send_match_notification_email
+from app.services.face_matcher import get_confidence_level
 from app.dependencies import get_current_user, require_admin
 
 router = APIRouter(prefix="/api/matches", tags=["Matches"])
@@ -30,106 +32,38 @@ router = APIRouter(prefix="/api/matches", tags=["Matches"])
 # ──────────────────────────────────────────────
 @router.get("/")
 async def get_matches(current_user: dict = Depends(get_current_user)):
-    """
-    Get AI match results.
-    Admin → sees all matches.
-    User  → sees only matches tied to reports they submitted.
-
-    Each match is GUARANTEED to be cross-user (missing_reporter ≠ found_reporter).
-    """
+    """Return all stored match documents for authenticated users, with debug logging."""
     db = get_db()
-    is_admin = current_user.get("role") == "Admin"
-    user_email = current_user["email"]
+    collection_name = "matches"
+    query = {}
 
-    if is_admin:
-        # Admin sees all matches
-        cursor = db.matches.find().sort("created_at", -1)
-    else:
-        # User sees only matches involving their reports
-        cursor = db.matches.find({
-            "$or": [
-                {"missing_reporter": user_email},
-                {"found_reporter": user_email},
-            ]
-        }).sort("created_at", -1)
+    print(f"MongoDB collection being queried: {collection_name}")
+    print(f"Exact query: {query}")
+    print(f"current_user: {current_user}")
+    print(f"user role: {current_user.get('role')}")
 
-    db_matches = await cursor.to_list(None)
-    match_results = []
+    total_documents = await db.matches.count_documents({})
+    print(f"Total documents in db.matches: {total_documents}")
 
-    for row in db_matches:
-        # Validate cross-user integrity (safe-guard)
-        if row.get("missing_reporter") == row.get("found_reporter"):
-            continue  # Skip any (shouldn't exist) self-match
+    matches = await db.matches.find(query).sort("created_at", -1).to_list(None)
+    print(f"Documents returned before filtering: {matches}")
 
-        missing_child = await db.children.find_one({"_id": row["missing_id"]})
-        found_child = await db.children_found.find_one({"_id": row["found_id"]})
+    filtered_matches = matches
+    print(f"Documents returned after filtering: {filtered_matches}")
 
-        if not missing_child or not found_child:
-            continue
+    def _convert_object_ids(value):
+        if isinstance(value, ObjectId):
+            return str(value)
+        if isinstance(value, dict):
+            return {key: _convert_object_ids(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [_convert_object_ids(item) for item in value]
+        return value
 
-        # Use stored confidence or re-compute
-        conf_label = row.get("confidence_label")
-        conf_class = row.get("confidence_class")
-        if not conf_label:
-            conf_label, conf_class = get_confidence_level(row["score"])
-
-        # Determine user-specific context message
-        user_context = None
-        if not is_admin:
-            if row.get("missing_reporter") == user_email:
-                user_context = {
-                    "role": "lost_reporter",
-                    "heading": "Possible match found for your missing child",
-                    "detail": (
-                        f"A found child matches your report for \"{missing_child.get('name', 'Unknown')}\" "
-                        f"with {conf_label.lower()} ({row['score']:.1f}% similarity). "
-                        f"Found at: {found_child.get('location', 'Unknown')}."
-                    ),
-                }
-            elif row.get("found_reporter") == user_email:
-                user_context = {
-                    "role": "found_reporter",
-                    "heading": "This child may match a reported missing case",
-                    "detail": (
-                        f"The child you reported found (\"{found_child.get('name', 'Unknown')}\") "
-                        f"matches missing child \"{missing_child.get('name', 'Unknown')}\" "
-                        f"with {conf_label.lower()} ({row['score']:.1f}% similarity)."
-                    ),
-                }
-
-        match_results.append({
-            "id": str(row["_id"]),
-            "score": row["score"],
-            "confidence_label": conf_label,
-            "confidence_class": conf_class,
-            "status": row.get("status", "Pending"),
-            "admin_notes": row.get("admin_notes", ""),
-            "reviewed_at": row.get("reviewed_at", None),
-            "timestamp": row.get("created_at", ""),
-            "missing_reporter": row.get("missing_reporter", ""),
-            "found_reporter": row.get("found_reporter", ""),
-            "user_context": user_context,
-            "missing": {
-                "name": missing_child.get("name"),
-                "age": missing_child.get("age"),
-                "gender": missing_child.get("gender"),
-                "location": missing_child.get("location"),
-                "description": missing_child.get("description", ""),
-                "image": missing_child.get("image"),
-                "reporter_email": missing_child.get("reporter_email", ""),
-            },
-            "found": {
-                "name": found_child.get("name"),
-                "age": found_child.get("age"),
-                "gender": found_child.get("gender"),
-                "location": found_child.get("location"),
-                "description": found_child.get("description", ""),
-                "image": found_child.get("image"),
-                "reporter_email": found_child.get("reporter_email", ""),
-            }
-        })
-
-    return match_results
+    serialized_matches = [_convert_object_ids(match) for match in filtered_matches]
+    print(f"Total matches in MongoDB: {total_documents}")
+    print(f"Matches returned by API: {serialized_matches}")
+    return serialized_matches
 
 
 # ──────────────────────────────────────────────
@@ -220,71 +154,124 @@ async def confirm_match(
     current_user: dict = Depends(require_admin),
 ):
     """Confirm a match as valid. Admin only."""
+    import traceback
+
+    print(f"\n{'='*60}")
+    print(f"[CONFIRM MATCH] match_id received: {match_id}")
+    print(f"[CONFIRM MATCH] admin user: {current_user.get('email')}")
+
     db = get_db()
 
+    # --- Validate match_id ---
     try:
         oid = ObjectId(match_id)
     except Exception:
+        print(f"[CONFIRM MATCH] ERROR: Invalid ObjectId format: {match_id}")
         raise HTTPException(status_code=400, detail="Invalid match ID")
 
-    match = await db.matches.find_one({"_id": oid})
+    print(f"[CONFIRM MATCH] MongoDB query: {{'_id': ObjectId('{match_id}')}}")
+
+    # --- Find match document ---
+    try:
+        match = await db.matches.find_one({"_id": oid})
+    except Exception as exc:
+        print(f"[CONFIRM MATCH] DB find_one exception:\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail="Database error looking up match")
+
     if not match:
+        print(f"[CONFIRM MATCH] Match document NOT FOUND for id: {match_id}")
         raise HTTPException(status_code=404, detail="Match not found")
 
-    # Update match status
-    await db.matches.update_one(
-        {"_id": oid},
-        {"$set": {
-            "status": "Confirmed",
-            "reviewed_by": current_user["email"],
-            "reviewed_at": get_timestamp(),
-        }}
-    )
+    print(f"[CONFIRM MATCH] Match document found: {match}")
 
-    # Update the missing child status
-    await db.children.update_one(
-        {"_id": match["missing_id"]},
-        {"$set": {"status": "Confirmed Match"}}
-    )
+    try:
+        # --- Resolve field names (support both naming conventions) ---
+        match_score = match.get("score") or match.get("similarity_score") or 0
+        missing_child_id = match.get("missing_id") or match.get("missing_report_id")
+        found_child_id = match.get("found_id") or match.get("found_report_id")
 
-    # Notify both users about the confirmation
-    timestamp = get_timestamp()
-    missing_reporter = match.get("missing_reporter", "")
-    found_reporter = match.get("found_reporter", "")
+        print(f"[CONFIRM MATCH] Resolved score: {match_score}")
+        print(f"[CONFIRM MATCH] Resolved missing_child_id: {missing_child_id}")
+        print(f"[CONFIRM MATCH] Resolved found_child_id: {found_child_id}")
+        print(f"[CONFIRM MATCH] Current status: {match.get('status')}")
 
-    if missing_reporter:
-        await db.user_notifications.insert_one({
-            "recipient_email": missing_reporter,
-            "type": "match_confirmed",
-            "title": "✅ Match Confirmed by Admin",
-            "message": (
-                f"The match between your missing child \"{match.get('missing_child_name', 'Unknown')}\" "
-                f"and found child \"{match.get('found_child_name', 'Unknown')}\" "
-                f"has been CONFIRMED by an administrator. Please coordinate for reunion."
-            ),
-            "match_id": match_id,
-            "match_score": match["score"],
-            "read": False,
-            "created_at": timestamp,
-        })
+        # --- Update match status: pending_review → confirmed ---
+        await db.matches.update_one(
+            {"_id": oid},
+            {"$set": {
+                "status": "confirmed",
+                "reviewed_by": current_user.get("email", ""),
+                "reviewed_at": get_timestamp(),
+            }}
+        )
+        print(f"[CONFIRM MATCH] Match status updated to 'confirmed'")
 
-    if found_reporter:
-        await db.user_notifications.insert_one({
-            "recipient_email": found_reporter,
-            "type": "match_confirmed",
-            "title": "✅ Match Confirmed by Admin",
-            "message": (
-                f"The match between found child \"{match.get('found_child_name', 'Unknown')}\" "
-                f"and missing child \"{match.get('missing_child_name', 'Unknown')}\" "
-                f"has been CONFIRMED by an administrator."
-            ),
-            "match_id": match_id,
-            "match_score": match["score"],
-            "read": False,
-            "created_at": timestamp,
-        })
+        # --- Update the missing child status ---
+        if missing_child_id:
+            # Ensure it's an ObjectId for the query
+            if not isinstance(missing_child_id, ObjectId):
+                try:
+                    missing_child_id = ObjectId(missing_child_id)
+                except Exception:
+                    pass  # keep as-is if it can't be converted
 
-    return {"success": True, "message": "Match confirmed successfully", "status": "Confirmed"}
+            result = await db.children.update_one(
+                {"_id": missing_child_id},
+                {"$set": {"status": "Confirmed Match", "resolved_at": get_timestamp()}}
+            )
+            print(f"[CONFIRM MATCH] children.update_one matched={result.matched_count}, modified={result.modified_count}")
+        else:
+            print(f"[CONFIRM MATCH] No missing_child_id found — skipping children update")
+
+        await log_action(current_user.get("email", ""), "confirm_match", "match", match_id)
+
+        # --- Notify both users about the confirmation ---
+        timestamp = get_timestamp()
+        missing_reporter = match.get("missing_reporter", "")
+        found_reporter = match.get("found_reporter", "")
+
+        if missing_reporter:
+            await db.user_notifications.insert_one({
+                "recipient_email": missing_reporter,
+                "type": "match_confirmed",
+                "title": "✅ Match Confirmed by Admin",
+                "message": (
+                    f"The match between your missing child \"{match.get('missing_child_name', 'Unknown')}\" "
+                    f"and found child \"{match.get('found_child_name', 'Unknown')}\" "
+                    f"has been CONFIRMED by an administrator. Please coordinate for reunion."
+                ),
+                "match_id": match_id,
+                "match_score": match_score,
+                "read": False,
+                "created_at": timestamp,
+            })
+
+        if found_reporter:
+            await db.user_notifications.insert_one({
+                "recipient_email": found_reporter,
+                "type": "match_confirmed",
+                "title": "✅ Match Confirmed by Admin",
+                "message": (
+                    f"The match between found child \"{match.get('found_child_name', 'Unknown')}\" "
+                    f"and missing child \"{match.get('missing_child_name', 'Unknown')}\" "
+                    f"has been CONFIRMED by an administrator."
+                ),
+                "match_id": match_id,
+                "match_score": match_score,
+                "read": False,
+                "created_at": timestamp,
+            })
+
+        print(f"[CONFIRM MATCH] ✅ Complete — notifications sent")
+        print(f"{'='*60}\n")
+
+        return {"success": True, "message": "Match confirmed successfully", "status": "confirmed"}
+
+    except HTTPException:
+        raise
+    except Exception as exc:
+        print(f"[CONFIRM MATCH] ❌ EXCEPTION:\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Failed to confirm match: {str(exc)}")
 
 
 # ──────────────────────────────────────────────
@@ -359,6 +346,8 @@ async def reject_match(
             "created_at": timestamp,
         })
 
+    await log_action(current_user["email"], "reject_match", "match", match_id)
+
     return {"success": True, "message": "Match rejected", "status": "Rejected"}
 
 
@@ -372,6 +361,8 @@ async def get_match_stats(current_user: dict = Depends(get_current_user)):
     db = get_db()
     is_admin = current_user.get("role") == "Admin"
     user_email = current_user["email"]
+    
+    print(f"GET /api/matches/stats/summary - User: {user_email}, Is Admin: {is_admin}")
 
     if is_admin:
         base_query = {}
@@ -387,6 +378,8 @@ async def get_match_stats(current_user: dict = Depends(get_current_user)):
     pending = await db.matches.count_documents({**base_query, "status": "Pending"})
     confirmed = await db.matches.count_documents({**base_query, "status": "Confirmed"})
     rejected = await db.matches.count_documents({**base_query, "status": "Rejected"})
+    
+    print(f"  Total: {total}, Pending: {pending}, Confirmed: {confirmed}, Rejected: {rejected}")
 
     # High/medium/low confidence counts
     all_matches = await db.matches.find(base_query).to_list(None)
@@ -394,7 +387,7 @@ async def get_match_stats(current_user: dict = Depends(get_current_user)):
     medium = sum(1 for m in all_matches if 50 <= m.get("score", 0) < 75)
     low = sum(1 for m in all_matches if m.get("score", 0) < 50)
 
-    return {
+    result = {
         "total": total,
         "pending": pending,
         "confirmed": confirmed,
@@ -403,3 +396,5 @@ async def get_match_stats(current_user: dict = Depends(get_current_user)):
         "medium_confidence": medium,
         "low_confidence": low,
     }
+    print(f"  Stats: {result}")
+    return result

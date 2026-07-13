@@ -76,9 +76,16 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # Return a serialized, safe-to-use dict (no ObjectId, no password)
     user_data = serialize_doc(user)
     user_data.pop("password", None)
+    if "preferences" not in user_data:
+        user_data["preferences"] = {
+            "push_notifications": True,
+            "email_notifications": True,
+            "match_alerts": True,
+        }
+    if "email_verified" not in user_data:
+        user_data["email_verified"] = False
     return user_data
 
 
