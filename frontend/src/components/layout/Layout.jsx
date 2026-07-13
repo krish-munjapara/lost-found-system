@@ -21,19 +21,19 @@ const Layout = ({ children }) => {
   useEffect(() => {
     if (localStorage.getItem('darkMode') === 'true') {
       setDarkMode(true);
-      document.body.classList.add('dark');
+      document.documentElement.classList.add('dark');
     }
   }, []);
 
   const toggleDarkMode = () => {
     const isDark = !darkMode;
     setDarkMode(isDark);
-    document.body.classList.toggle('dark', isDark);
+    document.documentElement.classList.toggle('dark', isDark);
     localStorage.setItem('darkMode', isDark);
   };
 
-  const handleLogout = () => {
-    logout();                // ← Uses AuthContext logout (clears all state)
+  const handleLogout = async () => {
+    await logout();
     navigate('/login');
   };
 

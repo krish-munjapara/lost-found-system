@@ -1,71 +1,34 @@
-# 🛡️ Guardian-Link
+# 🛡️ Guardian-Link v3.0
 
-## AI-Powered Lost & Found Children Identification System
+**AI-Powered Lost & Found Child Detection System**
 
-Guardian-Link is a full-stack web application that helps authorities and citizens report missing children, submit sightings of found children, and uses **AI-powered facial recognition** to automatically match and reconnect families.
+Production-ready full-stack application for reporting missing/found children, AI face matching, admin verification, and public alert sharing.
 
 ---
 
-## 🚀 Tech Stack
+## Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
-| **Frontend** | React.js + Tailwind CSS (Vite) |
-| **Backend** | FastAPI (Python) |
-| **Database** | MongoDB |
-| **AI Engine** | DeepFace (Facenet model) + OpenCV |
+| Frontend | React 18 + Vite + Tailwind CSS |
+| Backend | FastAPI + Python 3.11 |
+| Database | MongoDB (Motor async) |
+| AI | DeepFace (Facenet) + cosine similarity |
+| Storage | Local uploads + optional Cloudinary |
+| Auth | JWT + refresh tokens + bcrypt |
 
 ---
 
-## 📁 Project Structure
+## Quick Start
 
-```
-Guardian-Link/
-│
-├── frontend/               # React + Tailwind (Vite)
-│   ├── src/
-│   │   ├── components/
-│   │   │   ├── layout/     # Header, Footer, Sidebar, Layout
-│   │   │   ├── common/     # Button, Input, Loader
-│   │   │   ├── admin/      # AdminCard, AdminTable
-│   │   │   ├── children/   # ChildCard, ChildForm
-│   │   │   ├── match/      # MatchCard, MatchResult
-│   │   │   └── report/     # ReportForm, ReportCard
-│   │   ├── pages/          # All 10 pages
-│   │   ├── services/       # API service layer
-│   │   ├── routes/         # AppRoutes
-│   │   └── context/        # AuthContext
-│   └── package.json
-│
-├── backend/                # FastAPI
-│   ├── app/
-│   │   ├── main.py         # Entry point
-│   │   ├── config.py       # Configuration
-│   │   ├── routes/         # API endpoints
-│   │   ├── models/         # Pydantic schemas
-│   │   ├── database/       # MongoDB connection
-│   │   ├── services/       # Face matcher AI
-│   │   └── utils/          # Helper functions
-│   ├── uploads/            # Image storage
-│   ├── requirements.txt
-│   └── run.py
-│
-├── database/               # MongoDB schema
-├── ai-model/               # AI model files
-├── README.md
-└── .gitignore
+### 1. Environment
+
+```bash
+cp .env.example .env
+# Edit .env — set MONGO_URI and SECRET_KEY at minimum
 ```
 
----
-
-## ⚙️ Setup Instructions
-
-### Prerequisites
-- **Node.js** v18+
-- **Python** 3.10+
-- **MongoDB** running on localhost:27017
-
-### Backend Setup
+### 2. Backend
 
 ```bash
 cd backend
@@ -73,13 +36,9 @@ pip install -r requirements.txt
 python run.py
 ```
 
-The API will be available at `http://127.0.0.1:8000`
+API: `http://127.0.0.1:8000` | Docs: `http://127.0.0.1:8000/docs`
 
-**Default Admin Account:**
-- Email: `admin@guardianlink.com`
-- Password: `1234`
-
-### Frontend Setup
+### 3. Frontend
 
 ```bash
 cd frontend
@@ -87,73 +46,130 @@ npm install
 npm run dev
 ```
 
-The frontend will be available at `http://localhost:5173`
+App: `http://localhost:5173`
 
 ---
 
-## 🔑 Key Features
+## Docker Deployment
 
-### 🔐 Authentication
-- JWT-based authentication
-- Role-based access (Admin / User)
-- Secure password hashing (bcrypt)
+```bash
+cp .env.example .env
+# Configure .env with production values
+docker-compose up --build
+```
 
-### 📝 Report System
-- Report missing children with photo upload
-- Report found children with location data
-- Auto-geolocation support
+Frontend: `http://localhost` | Backend: `http://localhost:8000`
 
-### 🤖 AI Face Matching
-- DeepFace with Facenet model
-- Automatic matching on report submission
-- Cosine similarity scoring (0-100%)
-- Confidence levels: High (75%+), Medium (50-74%), Low (<50%)
+---
 
-### 👤 Admin Panel
-- User management (view, delete)
+## Features
+
+### Authentication
+- Register / Login with JWT (30 min) + refresh tokens (7 days)
+- Forgot / Reset password via email
+- Change password in Settings
+- Email verification on registration
+- Token validation on app startup
+
+### AI Matching
+- DeepFace Facenet embeddings (unchanged core)
+- Background matching on report submit
+- Top-5 ranked matches per report
+- Cross-user matching rule enforced
+- Confidence: High ≥75%, Medium 50–74%, Low <50%
+
+### Security
+- Secrets via `.env` only
+- File upload: MIME validation, size limit, UUID filenames
+- Image compression before storage
+- Face embeddings stripped from API responses
+- Global error handling
+
+### Admin Panel
+- User management (delete)
+- Report management (delete, resolve)
+- Audit logs
 - Dashboard statistics
-- System monitoring
 
-### ⚙️ Settings
-- Profile management
-- Dark mode toggle
-- Notification preferences
-- Password change
+### Notifications
+- In-app + browser push (polling)
+- Email notifications (SMTP optional)
+- User notification preferences
 
 ---
 
-## 📊 API Endpoints
+## API Overview
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/api/auth/register` | Register new user |
-| POST | `/api/auth/login` | Login and get JWT |
-| GET | `/api/auth/me` | Get current user |
-| POST | `/api/children/report-lost` | Report missing child |
-| POST | `/api/children/report-found` | Report found child |
-| GET | `/api/children/missing` | List missing children |
-| GET | `/api/children/found` | List found children |
-| GET | `/api/matches/` | Get AI match results |
-| GET | `/api/reports/stats` | Dashboard statistics |
-| GET | `/api/admin/dashboard` | Admin dashboard data |
-| DELETE | `/api/admin/users/{id}` | Delete user |
+| POST | `/api/auth/register` | Register |
+| POST | `/api/auth/login` | Login |
+| POST | `/api/auth/refresh` | Refresh token |
+| POST | `/api/auth/forgot-password` | Request reset |
+| POST | `/api/auth/reset-password` | Reset password |
+| POST | `/api/auth/verify-email` | Verify email |
+| GET | `/api/auth/me` | Current user |
+| PUT | `/api/user/profile` | Update profile |
+| PUT | `/api/user/change-password` | Change password |
+| DELETE | `/api/user/account` | Delete account |
+| POST | `/api/children/report-lost` | Report missing |
+| POST | `/api/children/report-found` | Report found |
+| GET | `/api/matches/` | AI matches |
+| GET | `/api/admin/dashboard` | Admin stats |
+| GET | `/api/admin/audit-logs` | Audit trail |
+| GET | `/api/public/feed` | Public feed |
+
+Full interactive docs at `/docs` when backend is running.
 
 ---
 
-## 🏗️ Architecture Principles
+## Testing
 
-1. **Component-Based Architecture** — UI broken into reusable components
-2. **Clean Separation** — Routes, Services, Models, Utils are separate modules
-3. **Pages Assemble Components** — Pages only compose components, no business logic
-4. **Single Responsibility** — Each file has one clear purpose
-5. **DRY** — No duplicate code (e.g., ChildCard used by both Missing and Found pages)
+```bash
+# Backend
+cd backend && pytest tests/ -v
 
----
-
-## 📄 License
-
-This project is developed for academic purposes (Final Year Project).
+# Frontend
+cd frontend && npm test
+```
 
 ---
 
-**Made with ❤️ by Krish,Shaurya,Suraj,Raj**
+## Project Structure
+
+```
+LOST-FOUND-SYSTEM/
+├── backend/
+│   ├── app/
+│   │   ├── routes/       # API endpoints
+│   │   ├── services/     # AI, email, storage, audit
+│   │   ├── utils/        # File upload, tokens, sanitize
+│   │   └── database/     # MongoDB + indexes
+│   ├── tests/
+│   └── Dockerfile
+├── frontend/
+│   ├── src/
+│   │   ├── pages/        # 14 pages
+│   │   ├── components/
+│   │   └── services/api.js
+│   └── Dockerfile
+├── docker-compose.yml
+└── .env.example
+```
+
+---
+
+## Environment Variables
+
+See `.env.example` for the complete list. Required:
+
+- `MONGO_URI` — MongoDB connection string
+- `SECRET_KEY` — JWT signing secret (32+ chars)
+
+Optional: Cloudinary, SMTP email, CORS origins, admin credentials.
+
+---
+
+## License
+
+Academic Final Year Project — Krish, Shaurya, Suraj, Raj

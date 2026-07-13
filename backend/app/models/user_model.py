@@ -3,43 +3,72 @@ Guardian-Link User Model
 Pydantic schemas for user data validation.
 """
 
-from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
-from datetime import datetime
+
+from pydantic import BaseModel, EmailStr, Field
 
 
-# ──────────────────────────────────────────────
-# Request Schemas
-# ──────────────────────────────────────────────
 class UserRegister(BaseModel):
-    """Schema for user registration."""
+    """Registration body for POST /api/auth/register (alias: RegisterRequest)."""
     full_name: str = Field(..., min_length=2, max_length=100)
-    email: str = Field(..., min_length=5)
-    password: str = Field(..., min_length=4)
+    email: EmailStr
+    password: str = Field(..., min_length=8, max_length=72)
     mobile: str = Field(..., min_length=10, max_length=15)
     gender: str = Field(..., pattern="^(Male|Female|Other)$")
     address: str = Field(..., min_length=3)
 
 
+# Backward-compatible alias used in docs / older references
+RegisterRequest = UserRegister
+
+
 class UserLogin(BaseModel):
-    """Schema for user login."""
-    email: str
+    email: EmailStr
     password: str
 
 
 class UserUpdate(BaseModel):
-    """Schema for updating user profile."""
-    full_name: Optional[str] = None
-    mobile: Optional[str] = None
-    gender: Optional[str] = None
-    address: Optional[str] = None
+    full_name: Optional[str] = Field(None, min_length=2, max_length=100)
+    mobile: Optional[str] = Field(None, min_length=10, max_length=15)
+    gender: Optional[str] = Field(None, pattern="^(Male|Female|Other)$")
+    address: Optional[str] = Field(None, min_length=3)
 
 
-# ──────────────────────────────────────────────
-# Response Schemas
-# ──────────────────────────────────────────────
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str = Field(..., min_length=8, max_length=72)
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str = Field(..., min_length=8, max_length=72)
+
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
+
+
+class NotificationPreferences(BaseModel):
+    push_notifications: Optional[bool] = None
+    email_notifications: Optional[bool] = None
+    match_alerts: Optional[bool] = None
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    role: str
+    user_name: str
+    email: str
+    email_verified: bool = False
+
+
 class UserResponse(BaseModel):
-    """Schema for user data in API responses."""
     id: str
     full_name: str
     email: str
@@ -47,12 +76,5 @@ class UserResponse(BaseModel):
     gender: str
     address: str
     role: str
+    email_verified: bool = False
     created_at: Optional[str] = None
-
-
-class TokenResponse(BaseModel):
-    """Schema for JWT token response."""
-    access_token: str
-    token_type: str = "bearer"
-    role: str
-    user_name: str

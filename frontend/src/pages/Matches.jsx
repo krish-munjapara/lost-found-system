@@ -25,7 +25,15 @@ const Matches = () => {
     setLoading(true);
     try {
       const data = await matchesApi.getAll();
+      console.log('API Response:', data);
+      console.log('API Response Type:', typeof data);
+      console.log('API Response Is Array:', Array.isArray(data));
+      console.log('API Response Length:', Array.isArray(data) ? data.length : 'N/A');
+      if (Array.isArray(data) && data.length > 0) {
+        console.log('First Match:', data[0]);
+      }
       setMatches(data);
+      console.log('React State Set. Matches:', data);
     } catch (err) {
       console.error('Failed to load matches:', err);
     } finally {
