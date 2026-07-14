@@ -21,7 +21,9 @@ def test_get_face_encoding_falls_back_to_opencv(monkeypatch):
 
     monkeypatch.setattr(face_matcher, "_get_deepface", lambda: fake_deepface)
 
-    result = face_matcher.get_face_encoding("/tmp/example.jpg")
+    import numpy as np
+    dummy_img = np.zeros((100, 100, 3), dtype=np.uint8)
+    result = face_matcher.get_face_encoding(dummy_img)
 
     assert result is not None
     assert json.loads(result) == [0.1, 0.2, 0.3]

@@ -2,9 +2,6 @@
 Guardian-Link Admin Routes
 """
 
-import os
-from pathlib import Path
-
 from fastapi import APIRouter, HTTPException, Depends
 from bson import ObjectId
 
@@ -12,19 +9,20 @@ from app.database import get_db
 from app.utils import serialize_doc, validate_object_id, get_timestamp
 from app.dependencies import require_admin
 from app.services.audit_service import log_action
-from app.config import LOST_UPLOAD_PATH, FOUND_UPLOAD_PATH
 
 router = APIRouter(prefix="/api/admin", tags=["Admin"])
 
 PRIVATE_PROJECTION = {"encoding": 0}
 
 
-def _delete_image_file(filename: str, folder: str) -> None:
-    if not filename:
+def _delete_image_file(public_id: str) -> None:
+    if not public_id:
         return
-    base = LOST_UPLOAD_PATH if folder == "lost" else FOUND_UPLOAD_PATH
-    path = Path(base) / filename
-    path.unlink(missing_ok=True)
+    try:
+        import cloudinary.uploader
+        cloudinary.uploader.destroy(public_id)
+    except Exception as exc:
+        print(f"⚠️ Failed to delete image from Cloudinary: {exc}")
 
 
 @router.get("/dashboard")
@@ -102,7 +100,7 @@ async def delete_missing_child(child_id: str, current_user: dict = Depends(requi
     db = get_db()
     doc = await db.children.find_one({"_id": obj_id})
     if doc:
-        _delete_image_file(doc.get("image"), "lost")
+        _delete_image_file(doc.get("public_id"))
     await db.children.delete_one({"_id": obj_id})
     await db.matches.delete_many({"missing_id": obj_id})
     await log_action(current_user["email"], "delete_missing_report", "child", child_id)
@@ -128,7 +126,7 @@ async def delete_found_child(child_id: str, current_user: dict = Depends(require
     db = get_db()
     doc = await db.children_found.find_one({"_id": obj_id})
     if doc:
-        _delete_image_file(doc.get("image"), "found")
+        _delete_image_file(doc.get("public_id"))
     await db.children_found.delete_one({"_id": obj_id})
     await db.matches.delete_many({"found_id": obj_id})
     await log_action(current_user["email"], "delete_found_report", "child", child_id)
