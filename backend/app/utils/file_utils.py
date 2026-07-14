@@ -2,15 +2,12 @@
 
 import io
 import uuid
-from pathlib import Path
 
 from fastapi import HTTPException, UploadFile, status
 from PIL import Image
 
 from app.config import (
     ALLOWED_IMAGE_TYPES,
-    FOUND_UPLOAD_PATH,
-    LOST_UPLOAD_PATH,
     MAX_UPLOAD_SIZE_BYTES,
     MAX_UPLOAD_SIZE_MB,
 )
@@ -60,12 +57,4 @@ def generate_filename(content_type: str) -> str:
     return f"{uuid.uuid4().hex}{ext}"
 
 
-def save_image_locally(data: bytes, folder: str, filename: str) -> str:
-    base = LOST_UPLOAD_PATH if folder == "lost" else FOUND_UPLOAD_PATH
-    path = Path(base) / filename
-    path.write_bytes(data)
-    return filename
 
-
-def get_upload_folder(report_type: str) -> str:
-    return "lost" if report_type == "lost" else "found"

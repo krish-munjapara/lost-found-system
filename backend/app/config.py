@@ -65,15 +65,9 @@ CORS_ORIGINS = [o.strip() for o in _cors_raw.split(",") if o.strip()]
 # ──────────────────────────────────────────────
 # File Uploads
 # ──────────────────────────────────────────────
-UPLOAD_BASE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads")
-LOST_UPLOAD_PATH = os.path.join(UPLOAD_BASE, "lost")
-FOUND_UPLOAD_PATH = os.path.join(UPLOAD_BASE, "found")
 MAX_UPLOAD_SIZE_MB = int(os.getenv("MAX_UPLOAD_SIZE_MB", "10"))
 MAX_UPLOAD_SIZE_BYTES = MAX_UPLOAD_SIZE_MB * 1024 * 1024
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/jpg"}
-
-os.makedirs(LOST_UPLOAD_PATH, exist_ok=True)
-os.makedirs(FOUND_UPLOAD_PATH, exist_ok=True)
 
 # ──────────────────────────────────────────────
 # Cloudinary (optional)

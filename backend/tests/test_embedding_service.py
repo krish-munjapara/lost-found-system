@@ -43,7 +43,7 @@ async def test_create_embedding_record_for_report_handles_low_quality_image(monk
         report_id="report-1",
         report_type="missing",
         user_id="user-1",
-        image_path="/tmp/photo.jpg",
+        image_input="/tmp/photo.jpg",
     )
 
     assert result["status"] == "low_quality"
@@ -71,7 +71,7 @@ async def test_create_embedding_record_for_report_persists_embedding(monkeypatch
         report_id="report-2",
         report_type="found",
         user_id="user-2",
-        image_path="/tmp/photo2.jpg",
+        image_input="/tmp/photo2.jpg",
     )
 
     assert result["status"] == "success"
@@ -102,7 +102,7 @@ async def test_create_embedding_record_for_report_logs_success(monkeypatch):
         report_id="report-3",
         report_type="missing",
         user_id="user-3",
-        image_path="/tmp/photo3.jpg",
+        image_input="/tmp/photo3.jpg",
     )
 
     assert any(event == "Embedding Generated" for event, _ in events)

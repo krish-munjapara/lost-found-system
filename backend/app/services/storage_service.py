@@ -1,53 +1,50 @@
-"""Image storage — Cloudinary with local fallback."""
+"""Image storage — Cloudinary only."""
 
+from fastapi import HTTPException, status
 from app.config import (
     CLOUDINARY_API_KEY,
     CLOUDINARY_API_SECRET,
     CLOUDINARY_CLOUD_NAME,
     CLOUDINARY_ENABLED,
 )
-from app.utils.file_utils import save_image_locally
 
 
 def upload_image(data: bytes, folder: str, filename: str) -> dict:
     """
-    Upload image to Cloudinary if configured, else save locally.
-    Returns dict with filename, url, storage backend.
+    Upload image to Cloudinary.
+    Raises exception if Cloudinary is not configured or upload fails.
     """
-    if CLOUDINARY_ENABLED:
-        try:
-            import cloudinary
-            import cloudinary.uploader
+    if not CLOUDINARY_ENABLED:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Cloudinary is not configured. Image uploads are disabled."
+        )
+        
+    try:
+        import cloudinary
+        import cloudinary.uploader
 
-            cloudinary.config(
-                cloud_name=CLOUDINARY_CLOUD_NAME,
-                api_key=CLOUDINARY_API_KEY,
-                api_secret=CLOUDINARY_API_SECRET,
-            )
-            result = cloudinary.uploader.upload(
-                data,
-                folder=f"guardian-link/{folder}",
-                public_id=filename.rsplit(".", 1)[0],
-                overwrite=True,
-                resource_type="image",
-            )
-            return {
-                "filename": filename,
-                "image_url": result.get("secure_url"),
-                "storage": "cloudinary",
-            }
-        except Exception as exc:
-            print(f"⚠️ Cloudinary upload failed, using local storage: {exc}")
+        cloudinary.config(
+            cloud_name=CLOUDINARY_CLOUD_NAME,
+            api_key=CLOUDINARY_API_KEY,
+            api_secret=CLOUDINARY_API_SECRET,
+        )
+        result = cloudinary.uploader.upload(
+            data,
+            folder=f"guardian-link/{folder}",
+            public_id=filename.rsplit(".", 1)[0],
+            overwrite=True,
+            resource_type="image",
+        )
+        return {
+            "image_url": result.get("secure_url"),
+            "public_id": result.get("public_id"),
+            "storage": "cloudinary",
+        }
+    except Exception as exc:
+        print(f"⚠️ Cloudinary upload failed: {exc}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Image upload failed: {str(exc)}"
+        )
 
-    save_image_locally(data, folder, filename)
-    return {
-        "filename": filename,
-        "image_url": f"/uploads/{folder}/{filename}",
-        "storage": "local",
-    }
-
-
-def resolve_image_url(filename: str, folder: str, image_url: str | None = None) -> str:
-    if image_url and image_url.startswith("http"):
-        return image_url
-    return f"/uploads/{folder}/{filename}"

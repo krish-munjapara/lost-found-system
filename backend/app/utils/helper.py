@@ -15,6 +15,10 @@ def serialize_doc(doc: dict) -> dict:
     if doc is None:
         return None
 
+    if "image_url" in doc and doc.get("storage") == "cloudinary" and "image" not in doc:
+        doc = doc.copy()
+        doc["image"] = doc["image_url"].split("/")[-1]
+
     serialized = {}
     for key, value in doc.items():
         if isinstance(value, ObjectId):

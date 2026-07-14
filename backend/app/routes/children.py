@@ -2,9 +2,6 @@
 Guardian-Link Children Routes
 """
 
-import os
-from pathlib import Path
-
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, status, BackgroundTasks
 
 from app.database import get_db
@@ -12,7 +9,6 @@ from app.utils import serialize_doc, get_timestamp, sanitize_child
 from app.utils.file_utils import (
     read_and_validate_upload, compress_image, generate_filename,
 )
-from app.config import LOST_UPLOAD_PATH, FOUND_UPLOAD_PATH
 from app.services import upload_image
 from app.services.embedding_service import create_embedding_record_for_report
 from app.services.matching_service import run_matching_for_report
@@ -42,7 +38,6 @@ async def report_lost(
     filename = generate_filename(content_type)
     folder = "lost"
     storage = upload_image(compressed, folder, filename)
-    filepath = os.path.join(LOST_UPLOAD_PATH, filename)
 
     child_doc = {
         "name": child_name,
@@ -50,9 +45,9 @@ async def report_lost(
         "gender": gender,
         "location": location,
         "description": description,
-        "image": storage["filename"],
-        "image_url": storage.get("image_url"),
-        "storage": storage.get("storage", "local"),
+        "image_url": storage["image_url"],
+        "public_id": storage["public_id"],
+        "storage": "cloudinary",
         "status": "Pending",
         "reporter_email": reporter_email,
         "created_at": get_timestamp(),
@@ -74,7 +69,7 @@ async def report_lost(
         report_id=child_id,
         report_type="missing",
         user_id=current_user.get("id") or reporter_email,
-        image_path=filepath,
+        image_input=compressed,
         report_collection_name="children",
     )
 
@@ -117,7 +112,6 @@ async def report_found(
     filename = generate_filename(content_type)
     folder = "found"
     storage = upload_image(compressed, folder, filename)
-    filepath = os.path.join(FOUND_UPLOAD_PATH, filename)
 
     found_doc = {
         "name": child_name,
@@ -125,9 +119,9 @@ async def report_found(
         "gender": gender,
         "location": location,
         "description": description,
-        "image": storage["filename"],
-        "image_url": storage.get("image_url"),
-        "storage": storage.get("storage", "local"),
+        "image_url": storage["image_url"],
+        "public_id": storage["public_id"],
+        "storage": "cloudinary",
         "status": "Pending",
         "reporter_email": reporter_email,
         "created_at": get_timestamp(),
@@ -139,7 +133,7 @@ async def report_found(
         report_id=found_id,
         report_type="found",
         user_id=current_user.get("id") or reporter_email,
-        image_path=filepath,
+        image_input=compressed,
         report_collection_name="children_found",
     )
 

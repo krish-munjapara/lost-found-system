@@ -19,7 +19,38 @@ def log_event(event: str, **details: Any) -> None:
     print(f"[AI_LOG] {json.dumps(payload, default=str)}")
 
 
-def assess_image_quality(image_path: str) -> dict[str, Any]:
+import numpy as np
+
+def load_image_from_url_or_path(image_input: str | np.ndarray) -> np.ndarray | None:
+    """Download image from HTTP(S) URL or load from path, decoding to numpy array using cv2.imdecode."""
+    if isinstance(image_input, np.ndarray):
+        return image_input
+
+    if isinstance(image_input, str):
+        import cv2
+        if image_input.startswith("http://") or image_input.startswith("https://"):
+            try:
+                import urllib.request
+                with urllib.request.urlopen(image_input) as response:
+                    image_bytes = response.read()
+                nparr = np.frombuffer(image_bytes, np.uint8)
+                return cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            except Exception as exc:
+                print(f"Error downloading image from URL {image_input}: {exc}")
+                return None
+        else:
+            try:
+                from pathlib import Path
+                image_bytes = Path(image_input).read_bytes()
+                nparr = np.frombuffer(image_bytes, np.uint8)
+                return cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            except Exception as exc:
+                print(f"Error reading local file {image_input}: {exc}")
+                return None
+    return None
+
+
+def assess_image_quality(image_input: str | np.ndarray) -> dict[str, Any]:
     """Assess whether an image is suitable for embedding generation.
 
     The goal is to keep reports flow intact while providing a quality signal
@@ -38,7 +69,8 @@ def assess_image_quality(image_path: str) -> dict[str, Any]:
         }
 
     try:
-        image = cv2.imread(image_path)
+        image = load_image_from_url_or_path(image_input)
+
         if image is None:
             return {
                 "status": "low_quality",
@@ -116,14 +148,14 @@ def _parse_object_id(value: Any) -> ObjectId | None:
     return None
 
 
-async def generate_embedding_for_image(image_path: str) -> list[float] | None:
+async def generate_embedding_for_image(image_input: str | np.ndarray) -> list[float] | None:
     """Generate a face embedding for an image using the existing DeepFace implementation."""
-    raw_embedding = get_face_encoding(image_path)
+    raw_embedding = get_face_encoding(image_input)
     normalized = _normalize_embedding(raw_embedding)
     if normalized is None:
-        log_event("Embedding Generated", status="failed", image_path=image_path)
+        log_event("Embedding Generated", status="failed")
     else:
-        log_event("Embedding Generated", status="success", image_path=image_path, dimensions=len(normalized))
+        log_event("Embedding Generated", status="success", dimensions=len(normalized))
     return normalized
 
 
@@ -131,7 +163,7 @@ async def create_embedding_record_for_report(
     report_id: str,
     report_type: str,
     user_id: str | None,
-    image_path: str,
+    image_input: str | bytes | np.ndarray,
     report_collection_name: str | None = None,
     report_update_field: str = "embedding_id",
 ) -> dict[str, Any]:
@@ -141,7 +173,12 @@ async def create_embedding_record_for_report(
     if report_collection_name is None:
         report_collection_name = "children" if report_type == "missing" else "children_found"
 
-    quality = assess_image_quality(image_path)
+    if isinstance(image_input, bytes):
+        import cv2
+        nparr = np.frombuffer(image_input, np.uint8)
+        image_input = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+    quality = assess_image_quality(image_input)
     now = get_timestamp()
 
     if quality.get("status") != "good":
@@ -189,7 +226,7 @@ async def create_embedding_record_for_report(
             "embedding_dimensions": 0,
         }
 
-    embedding = await generate_embedding_for_image(image_path)
+    embedding = await generate_embedding_for_image(image_input)
     if embedding is None:
         log_event(
             "Rejected Reason",

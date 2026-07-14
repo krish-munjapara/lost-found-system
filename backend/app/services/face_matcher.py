@@ -42,13 +42,47 @@ def _get_deepface():
     return _deepface
 
 
-def _try_represent(DeepFace, image_path: str):
+def load_image_from_url_or_path(image_input: str | np.ndarray) -> np.ndarray | None:
+    """Download image from HTTP(S) URL or load from path, decoding to numpy array using cv2.imdecode."""
+    if isinstance(image_input, np.ndarray):
+        return image_input
+
+    if isinstance(image_input, str):
+        import cv2
+        if image_input.startswith("http://") or image_input.startswith("https://"):
+            try:
+                import urllib.request
+                with urllib.request.urlopen(image_input) as response:
+                    image_bytes = response.read()
+                nparr = np.frombuffer(image_bytes, np.uint8)
+                return cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            except Exception as exc:
+                print(f"Error downloading image from URL {image_input}: {exc}")
+                return None
+        else:
+            try:
+                from pathlib import Path
+                image_bytes = Path(image_input).read_bytes()
+                nparr = np.frombuffer(image_bytes, np.uint8)
+                return cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            except Exception as exc:
+                print(f"Error reading local file {image_input}: {exc}")
+                return None
+    return None
+
+
+def _try_represent(DeepFace, image_input: str | np.ndarray):
     """Try RetinaFace first and fall back to OpenCV without raising."""
+    img_arr = load_image_from_url_or_path(image_input)
+    if img_arr is None:
+        print("❌ Image loading failed, cannot represent")
+        return None, None
+
     last_error = None
     for backend in _DETECTOR_BACKENDS:
         try:
             results = DeepFace.represent(
-                img_path=image_path,
+                img_path=img_arr,
                 model_name=FACE_MODEL_NAME,
                 detector_backend=backend,
                 enforce_detection=True,
@@ -60,35 +94,35 @@ def _try_represent(DeepFace, image_path: str):
             last_error = RuntimeError(f"no embedding returned from {backend}")
         except Exception as exc:
             last_error = exc
-            print(f"⚠️ Face detection with {backend} failed for {image_path}: {exc}")
+            print(f"⚠️ Face detection with {backend} failed: {exc}")
 
     if last_error is not None:
-        print(f"❌ Face detection failed for {image_path}: {last_error}")
+        print(f"❌ Face detection failed: {last_error}")
     return None, None
 
 
 # ──────────────────────────────────────────────
 # Face Encoding
 # ──────────────────────────────────────────────
-def get_face_encoding(image_path: str) -> str | None:
+def get_face_encoding(image_input: str | np.ndarray) -> str | None:
     """
     Detect faces in an image and return the facial encoding as a JSON string.
 
     Args:
-        image_path: Path to the image file
+        image_input: Path to the image file or a numpy array
 
     Returns:
         JSON string of the face embedding, or None if no face detected
     """
     try:
         DeepFace = _get_deepface()
-        embedding, _ = _try_represent(DeepFace, image_path)
+        embedding, _ = _try_represent(DeepFace, image_input)
         if embedding is None:
             return None
         return json.dumps(embedding)
 
     except Exception as e:
-        print(f"❌ Face detection failed for {image_path}: {e}")
+        print(f"❌ Face detection failed: {e}")
         return None
 
 
