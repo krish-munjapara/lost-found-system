@@ -10,7 +10,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useNotifications } from '../../context/NotificationContext';
-import { Menu, Moon, Sun, Bell, Globe, User, Settings, LogOut, Shield, MapPin, Clock, ExternalLink } from 'lucide-react';
+import { Menu, Moon, Sun, Bell, Globe, User, Settings, LogOut, Shield, MapPin, Clock } from 'lucide-react';
 
 const Header = ({ sidebarOpen, setSidebarOpen, darkMode, toggleDarkMode, onLogout }) => {
   const [notifOpen, setNotifOpen] = useState(false);
@@ -102,14 +102,13 @@ const Header = ({ sidebarOpen, setSidebarOpen, darkMode, toggleDarkMode, onLogou
       <div className="flex items-center gap-2 lg:gap-4" ref={dropdownRef}>
         {/* Public Feed Link */}
         <Link
-          to="/public-feed"
+          to="/#public-feed"
           className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
             darkMode
               ? 'text-blue-400 hover:bg-blue-900/30'
               : 'text-blue-600 hover:bg-blue-50'
           }`}
         >
-          <ExternalLink className="w-3.5 h-3.5" />
           Public Feed
         </Link>
 
@@ -158,7 +157,7 @@ const Header = ({ sidebarOpen, setSidebarOpen, darkMode, toggleDarkMode, onLogou
                       className="p-4 border-b border-slate-50 hover:bg-blue-50/50 flex items-start gap-3 cursor-pointer transition-colors group"
                       onClick={() => {
                         setNotifOpen(false);
-                        navigate(`/public-feed?highlight=${n.child?.id || ''}`);
+                        navigate('/#public-feed');
                       }}
                     >
                       <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center shrink-0 text-sm group-hover:bg-red-200 transition-colors">
@@ -184,11 +183,11 @@ const Header = ({ sidebarOpen, setSidebarOpen, darkMode, toggleDarkMode, onLogou
               </div>
               <div className="p-3 border-t border-slate-100 bg-slate-50">
                 <Link
-                  to="/public-feed"
+                  to="/#public-feed"
                   className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center justify-center gap-1"
                   onClick={() => setNotifOpen(false)}
                 >
-                  View Public Feed <ExternalLink className="w-3 h-3" />
+                  View Public Feed
                 </Link>
               </div>
             </div>
@@ -241,8 +240,8 @@ const Header = ({ sidebarOpen, setSidebarOpen, darkMode, toggleDarkMode, onLogou
               <Link to="/settings" className="flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50" onClick={() => setUserMenuOpen(false)}>
                 <Settings className="w-4 h-4" /> Settings
               </Link>
-              <Link to="/public-feed" className="flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50" onClick={() => setUserMenuOpen(false)}>
-                <ExternalLink className="w-4 h-4" /> Public Feed
+              <Link to="/#public-feed" className="flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50" onClick={() => setUserMenuOpen(false)}>
+                Public Feed
               </Link>
               <div className="h-px bg-slate-100 my-1" />
               <button onClick={onLogout} className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 text-left">

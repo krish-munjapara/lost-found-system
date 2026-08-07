@@ -36,11 +36,11 @@ const ResetPassword = () => {
         <h1 className="text-xl font-bold mb-6 flex items-center gap-2 dark:text-white"><Shield className="w-7 h-7 text-blue-600" /> Reset Password</h1>
         {error && <p className="text-red-600 text-sm mb-4">{error}</p>}
         <form onSubmit={handleSubmit} className="space-y-4">
-          <input type="password" className="input-field w-full" placeholder="New password (min 8)" value={password} onChange={(e) => setPassword(e.target.value)} minLength={8} required />
-          <input type="password" className="input-field w-full" placeholder="Confirm password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required />
-          <button type="submit" disabled={loading || !token} className="btn-primary w-full">Reset Password</button>
+          <input type="password" className="input-field w-full" placeholder="New password (min 8)" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" aria-label="New password" minLength={8} required />
+          <input type="password" className="input-field w-full" placeholder="Confirm password" value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" aria-label="Confirm password" required />
+          <button type="submit" disabled={loading || !token} className="btn-primary w-full justify-center shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">Reset Password</button>
         </form>
-        <p className="text-center mt-4 text-sm"><Link to="/login" className="text-blue-600">Back to login</Link></p>
+        <p className="text-center mt-4 text-sm"><Link to="/login" className="text-blue-600 hover:text-blue-700 hover:underline transition-colors">Back to login</Link></p>
       </div>
     </div>
   );

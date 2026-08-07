@@ -343,7 +343,7 @@ export const publicApi = {
 export const shareUtils = {
   getShareUrl: (childId) => {
     const origin = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : '';
-    return `${origin}/public-feed?highlight=${childId}`.replace(/^\//, '/');
+    return `${origin}/#public-feed`.replace(/^\//, '/');
   },
   shareWhatsApp: (child) => {
     const text = `🚨 MISSING CHILD: ${child.name}, Age ${child.age} — ${child.location}\n${shareUtils.getShareUrl(child.id)}`;

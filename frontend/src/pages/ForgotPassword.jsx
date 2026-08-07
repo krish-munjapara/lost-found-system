@@ -37,10 +37,10 @@ const ForgotPassword = () => {
         {message && <p className="text-green-600 text-sm mb-4">{message}</p>}
         {error && <p className="text-red-600 text-sm mb-4">{error}</p>}
         <form onSubmit={handleSubmit} className="space-y-4">
-          <input type="email" className="input-field w-full" placeholder="Email address" value={email} onChange={(e) => setEmail(e.target.value)} required />
-          <button type="submit" disabled={loading} className="btn-primary w-full">{loading ? 'Sending...' : 'Send Reset Link'}</button>
+          <input type="email" className="input-field w-full" placeholder="Email address" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" aria-label="Email address" required />
+          <button type="submit" disabled={loading} className="btn-primary w-full justify-center shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">{loading ? 'Sending...' : 'Send Reset Link'}</button>
         </form>
-        <p className="text-center mt-4 text-sm text-slate-500"><Link to="/login" className="text-blue-600">Back to login</Link></p>
+        <p className="text-center mt-4 text-sm text-slate-500"><Link to="/login" className="text-blue-600 hover:text-blue-700 hover:underline transition-colors">Back to login</Link></p>
       </div>
     </div>
   );

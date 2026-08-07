@@ -110,19 +110,25 @@ const Register = () => {
         <div className="absolute top-6 right-6 z-50 lang-switch">
           <button
             type="button"
-            className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 border border-slate-200 text-sm text-slate-500 hover:bg-slate-200 hover:text-slate-900 transition-colors"
+            className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 border border-slate-200 text-sm text-slate-500 hover:bg-slate-200 hover:text-slate-900 transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 focus-visible:ring-offset-2"
             onClick={() => setLangDropdownOpen(!langDropdownOpen)}
+            aria-label="Toggle language selector"
+            aria-expanded={langDropdownOpen}
           >
             <Globe className="w-4 h-4" /> {language} <ChevronDown className="w-3 h-3" />
           </button>
           {langDropdownOpen && (
             <div className="absolute top-full mt-2 right-0 min-w-[140px] bg-white border border-slate-200 rounded-lg shadow-lg overflow-hidden py-1">
               {['English', 'Hindi'].map((lang) => (
-                <div key={lang} className="px-3 py-2 text-sm text-slate-800 hover:bg-slate-50 cursor-pointer flex justify-between"
-                  onClick={() => { setLanguage(lang); setLangDropdownOpen(false); }}>
+                <button
+                  key={lang}
+                  type="button"
+                  className="w-full px-3 py-2 text-sm text-slate-800 hover:bg-slate-50 cursor-pointer flex justify-between items-center"
+                  onClick={() => { setLanguage(lang); setLangDropdownOpen(false); }}
+                >
                   <span>{lang === 'English' ? '🇺🇸 English' : '🇮🇳 हिन्दी'}</span>
                   {language === lang && <Check className="w-4 h-4 text-blue-600" />}
-                </div>
+                </button>
               ))}
             </div>
           )}
@@ -150,29 +156,29 @@ const Register = () => {
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium text-slate-900" htmlFor="reg-fullname">Full Name</label>
               <input type="text" id="reg-fullname" value={fullName} onChange={(e) => setFullName(e.target.value)}
-                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-md text-sm bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all"
-                placeholder="John Doe" minLength={2} maxLength={100} required />
+                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-md text-sm bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all duration-200 focus-visible:ring-4 focus-visible:ring-blue-500/20"
+                placeholder="John Doe" autoComplete="name" minLength={2} maxLength={100} required />
             </div>
 
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium text-slate-900" htmlFor="reg-email">Email Address</label>
               <input type="email" id="reg-email" value={email} onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-md text-sm bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all"
-                placeholder="you@example.com" required />
+                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-md text-sm bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all duration-200 focus-visible:ring-4 focus-visible:ring-blue-500/20"
+                placeholder="you@example.com" autoComplete="email" required />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-medium text-slate-900" htmlFor="reg-password">Password</label>
                 <input type="password" id="reg-password" value={password} onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-3.5 py-2.5 border border-slate-200 rounded-md text-sm bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all"
-                  placeholder="Min. 8 characters" minLength={8} maxLength={72} required />
+                  className="w-full px-3.5 py-2.5 border border-slate-200 rounded-md text-sm bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all duration-200 focus-visible:ring-4 focus-visible:ring-blue-500/20"
+                  placeholder="Min. 8 characters" autoComplete="new-password" minLength={8} maxLength={72} required />
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-medium text-slate-900" htmlFor="reg-confirm">Confirm Password</label>
                 <input type="password" id="reg-confirm" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full px-3.5 py-2.5 border border-slate-200 rounded-md text-sm bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all"
-                  placeholder="Confirm password" minLength={8} maxLength={72} required />
+                  className="w-full px-3.5 py-2.5 border border-slate-200 rounded-md text-sm bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all duration-200 focus-visible:ring-4 focus-visible:ring-blue-500/20"
+                  placeholder="Confirm password" autoComplete="new-password" minLength={8} maxLength={72} required />
               </div>
             </div>
 
@@ -180,13 +186,13 @@ const Register = () => {
               <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-medium text-slate-900" htmlFor="reg-mobile">Mobile Number</label>
                 <input type="text" id="reg-mobile" value={mobile} onChange={(e) => setMobile(e.target.value)}
-                  className="w-full px-3.5 py-2.5 border border-slate-200 rounded-md text-sm bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all"
-                  placeholder="9876543210" minLength={10} maxLength={15} required />
+                  className="w-full px-3.5 py-2.5 border border-slate-200 rounded-md text-sm bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all duration-200 focus-visible:ring-4 focus-visible:ring-blue-500/20"
+                  placeholder="9876543210" autoComplete="tel" minLength={10} maxLength={15} required />
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-sm font-medium text-slate-900" htmlFor="reg-gender">Gender</label>
                 <select id="reg-gender" value={gender} onChange={(e) => setGender(e.target.value)}
-                  className="w-full px-3.5 py-2.5 border border-slate-200 rounded-md text-sm bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all" required>
+                  className="w-full px-3.5 py-2.5 border border-slate-200 rounded-md text-sm bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all duration-200 focus-visible:ring-4 focus-visible:ring-blue-500/20" required>
                   <option value="">Select Gender</option>
                   <option>Male</option>
                   <option>Female</option>
@@ -198,17 +204,17 @@ const Register = () => {
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium text-slate-900" htmlFor="reg-address">Address</label>
               <input type="text" id="reg-address" value={address} onChange={(e) => setAddress(e.target.value)}
-                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-md text-sm bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all"
-                placeholder="Your address" minLength={3} required />
+                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-md text-sm bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all duration-200 focus-visible:ring-4 focus-visible:ring-blue-500/20"
+                placeholder="Your address" autoComplete="street-address" minLength={3} required />
             </div>
 
             <button type="button" onClick={fillAddress}
-              className="w-full py-2 px-3.5 rounded-md bg-slate-50 border border-dashed border-slate-300 text-slate-500 font-medium text-xs hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50 transition-all flex items-center justify-center gap-2">
+              className="w-full py-2 px-3.5 rounded-lg bg-slate-50 border border-dashed border-slate-300 text-slate-500 font-medium text-xs hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-sm flex items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 focus-visible:ring-offset-2">
               <MapPin className="w-4 h-4" /> Use Current Location
             </button>
 
             <button type="submit" disabled={loading}
-              className="w-full mt-2 py-3 px-6 rounded-md bg-gradient-to-br from-blue-600 to-blue-800 text-white font-semibold text-sm shadow-md hover:shadow-lg hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2 relative overflow-hidden group disabled:opacity-50">
+              className="w-full mt-2 py-3 px-6 rounded-lg bg-gradient-to-br from-blue-600 to-blue-800 text-white font-semibold text-sm shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 flex items-center justify-center gap-2 relative overflow-hidden group disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 focus-visible:ring-offset-2">
               <span className="relative z-10 flex items-center gap-2">
                 {loading ? 'Creating...' : 'Create Account'}
                 {!loading && <ArrowRight className="w-4 h-4" />}

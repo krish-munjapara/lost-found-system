@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Guardian-Link logo">
+  <rect width="64" height="64" rx="16" fill="#2563eb"/>
+  <path d="M20 18h24c6 0 10 4 10 10v8c0 6-4 10-10 10H20c-6 0-10-4-10-10v-8c0-6 4-10 10-10Zm2 6c-3 0-6 2-6 6v4c0 4 3 6 6 6h20c3 0 6-2 6-6v-4c0-4-3-6-6-6H22Z" fill="#fff"/>
+  <path d="M26 28h12v8H26z" fill="#bfdbfe"/>
+  <path d="M32 15l4 6h-8l4-6Z" fill="#eff6ff"/>
+</svg>

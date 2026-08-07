@@ -23,6 +23,21 @@ const Home = () => {
     loadStats();
   }, []);
 
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+
+    const hash = window.location.hash;
+    if (hash) {
+      const sectionId = hash.replace('#', '');
+      const target = document.getElementById(sectionId);
+      if (target) {
+        requestAnimationFrame(() => {
+          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+      }
+    }
+  }, []);
+
   const loadStats = async () => {
     try {
       const data = await publicApi.getStats();

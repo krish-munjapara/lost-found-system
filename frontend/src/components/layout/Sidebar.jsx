@@ -11,7 +11,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import {
   Shield, LayoutDashboard, FileText, AlertCircle,
-  MapPin, ShieldAlert, Cpu, Settings, ExternalLink
+  MapPin, ShieldAlert, Cpu, Settings
 } from 'lucide-react';
 
 const SidebarItem = ({ to, icon: Icon, label, badge, active, darkMode }) => (
@@ -46,7 +46,7 @@ const Sidebar = ({ open, setOpen, darkMode }) => {
       title: 'Main',
       items: [
         { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-        { to: '/public-feed', icon: ExternalLink, label: 'Public Feed' },
+        { to: '/#public-feed', label: 'Public Feed' },
       ]
     },
     {
