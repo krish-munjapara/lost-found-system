@@ -11,27 +11,31 @@ import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import {
   Shield, LayoutDashboard, FileText, AlertCircle,
-  MapPin, ShieldAlert, Cpu, Settings
+  MapPin, ShieldAlert, Cpu, Settings, Globe
 } from 'lucide-react';
 
-const SidebarItem = ({ to, icon: Icon, label, badge, active, darkMode }) => (
-  <Link
-    to={to}
-    className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
-      active
-        ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
-        : `${darkMode ? 'text-slate-400 hover:bg-slate-800 hover:text-white' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`
-    }`}
-  >
-    <Icon className={`w-5 h-5 ${active ? 'text-blue-600 dark:text-blue-400' : darkMode ? 'text-slate-500' : 'text-slate-400'}`} />
-    <span className="flex-1">{label}</span>
-    {badge && (
-      <span className="bg-red-100 text-red-600 text-[10px] font-bold px-2 py-0.5 rounded-full">
-        {badge}
-      </span>
-    )}
-  </Link>
-);
+const SidebarItem = ({ to, icon: Icon, label, badge, active, darkMode }) => {
+  const IconComponent = Icon || Globe;
+
+  return (
+    <Link
+      to={to}
+      className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
+        active
+          ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+          : `${darkMode ? 'text-slate-400 hover:bg-slate-800 hover:text-white' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`
+      }`}
+    >
+      <IconComponent className={`w-5 h-5 ${active ? 'text-blue-600 dark:text-blue-400' : darkMode ? 'text-slate-500' : 'text-slate-400'}`} />
+      <span className="flex-1">{label}</span>
+      {badge && (
+        <span className="bg-red-100 text-red-600 text-[10px] font-bold px-2 py-0.5 rounded-full">
+          {badge}
+        </span>
+      )}
+    </Link>
+  );
+};
 
 const Sidebar = ({ open, setOpen, darkMode }) => {
   const location = useLocation();
@@ -46,7 +50,7 @@ const Sidebar = ({ open, setOpen, darkMode }) => {
       title: 'Main',
       items: [
         { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-        { to: '/#public-feed', label: 'Public Feed' },
+        { to: '/news', icon: Globe, label: 'News' },
       ]
     },
     {
