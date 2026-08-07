@@ -17,6 +17,14 @@ const getUploadsBaseUrl = () => {
   return '';
 };
 
+const isLocalhostUrl = (value) => /^(https?:\/\/)?(localhost|127\.0\.0\.1)(:\d+)?(\/|$)/i.test(value || '');
+
+const shouldUseRelativeUploads = () => {
+  if (typeof window === 'undefined') return true;
+  return isLocalhostUrl(window.location.origin);
+};
+
+
 const getToken = () => localStorage.getItem('token');
 const getRefreshToken = () => localStorage.getItem('refresh_token');
 
@@ -148,11 +156,15 @@ export const getImageUrl = (image, folder = 'lost', imageUrl = null) => {
   const normalizedFolder = folder.replace(/^\/+/, '');
   const uploadsBaseUrl = getUploadsBaseUrl();
 
+  const useRelativePaths = shouldUseRelativeUploads();
+
   if (normalizedImage.startsWith('uploads/')) {
-    return uploadsBaseUrl ? `${uploadsBaseUrl}/${normalizedImage}` : `/${normalizedImage}`;
+    return uploadsBaseUrl && !useRelativePaths
+      ? `${uploadsBaseUrl}/${normalizedImage}`
+      : `/${normalizedImage}`;
   }
 
-  return uploadsBaseUrl
+  return uploadsBaseUrl && !useRelativePaths
     ? `${uploadsBaseUrl}/uploads/${normalizedFolder}/${normalizedImage}`
     : `/uploads/${normalizedFolder}/${normalizedImage}`;
 };
@@ -343,7 +355,8 @@ export const publicApi = {
 export const shareUtils = {
   getShareUrl: (childId) => {
     const origin = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : '';
-    return `${origin}/#public-feed`.replace(/^\//, '/');
+    const baseUrl = `${origin}/#public-feed`.replace(/^\//, '/');
+    return childId ? `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}highlight=${encodeURIComponent(childId)}` : baseUrl;
   },
   shareWhatsApp: (child) => {
     const text = `🚨 MISSING CHILD: ${child.name}, Age ${child.age} — ${child.location}\n${shareUtils.getShareUrl(child.id)}`;

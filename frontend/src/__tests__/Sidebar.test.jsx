@@ -19,6 +19,6 @@ describe('Sidebar', () => {
       </MemoryRouter>
     );
 
-    expect(markup).toContain('Public Feed');
+    expect(markup).toContain('News');
   });
 });
