@@ -11,9 +11,12 @@ import Admin from '../pages/Admin';
 import Dashboard from '../pages/Dashboard';
 import FoundChildren from '../pages/FoundChildren';
 import ForgotPassword from '../pages/ForgotPassword';
+import Home from '../pages/Home';
+import IntelligenceMap from '../pages/IntelligenceMap';
 import Login from '../pages/Login';
 import Matches from '../pages/Matches';
 import MissingChildren from '../pages/MissingChildren';
+import News from '../pages/News';
 import PublicFeed from '../pages/PublicFeed';
 import Register from '../pages/Register';
 import ReportFound from '../pages/ReportFound';
@@ -46,7 +49,9 @@ const PublicRoute = ({ children }) => {
 
 const AppRoutes = () => (
   <Routes>
-    <Route path="/" element={<PublicFeed />} />
+    <Route path="/" element={<Home />} />
+    <Route path="/news" element={<News />} />
+    <Route path="/intelligence-map" element={<IntelligenceMap />} />
     <Route path="/public-feed" element={<PublicFeed />} />
     <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
     <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />

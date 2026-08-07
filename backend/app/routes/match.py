@@ -195,11 +195,11 @@ async def confirm_match(
         print(f"[CONFIRM MATCH] Resolved found_child_id: {found_child_id}")
         print(f"[CONFIRM MATCH] Current status: {match.get('status')}")
 
-        # --- Update match status: pending_review → confirmed ---
+        # --- Update match status: pending_review → Confirmed ---
         await db.matches.update_one(
             {"_id": oid},
             {"$set": {
-                "status": "confirmed",
+                "status": "Confirmed",
                 "reviewed_by": current_user.get("email", ""),
                 "reviewed_at": get_timestamp(),
             }}
@@ -262,15 +262,15 @@ async def confirm_match(
                 "created_at": timestamp,
             })
 
-        print(f"[CONFIRM MATCH] ✅ Complete — notifications sent")
+        print("[CONFIRM MATCH] Complete — notifications sent")
         print(f"{'='*60}\n")
 
-        return {"success": True, "message": "Match confirmed successfully", "status": "confirmed"}
+        return {"success": True, "message": "Match confirmed successfully", "status": "Confirmed"}
 
     except HTTPException:
         raise
     except Exception as exc:
-        print(f"[CONFIRM MATCH] ❌ EXCEPTION:\n{traceback.format_exc()}")
+        print(f"[CONFIRM MATCH] EXCEPTION:\n{traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"Failed to confirm match: {str(exc)}")
 
 

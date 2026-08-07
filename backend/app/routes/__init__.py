@@ -5,3 +5,4 @@ from .report import router as report_router
 from .match import router as match_router
 from .user import router as user_router
 from .public import router as public_router
+from .intelligence import router as intelligence_router

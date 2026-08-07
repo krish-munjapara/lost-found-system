@@ -382,6 +382,13 @@ async def run_matching_for_report(
         result = await db.matches.insert_one(match_doc)
         match_doc["_id"] = str(result.inserted_id)
         created_matches.append(match_doc)
+        
+        # Update the missing child's status to "Ai Matches"
+        await db.children.update_one(
+            {"_id": missing_id},
+            {"$set": {"status": "Ai Matches", "updated_at": now}}
+        )
+        
         log_event(
             "Match Created",
             report_id=str(report_obj_id),

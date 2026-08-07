@@ -24,4 +24,29 @@ async def ensure_indexes() -> None:
         for field, direction in fields:
             await collection.create_index([(field, direction)])
 
-    print("✅ MongoDB indexes ensured")
+    # New indexes for structured location
+    await db.children.create_index([("location_structured.state", 1)])
+    await db.children.create_index([("location_structured.district", 1)])
+    await db.children.create_index([("location_structured.city", 1)])
+    await db.children.create_index([("location_structured.pincode", 1)])
+    
+    # Geo-spatial index for location queries
+    await db.children.create_index([("location_structured.geo_point", "2dsphere")])
+    
+    # Same indexes for children_found
+    await db.children_found.create_index([("location_structured.state", 1)])
+    await db.children_found.create_index([("location_structured.district", 1)])
+    await db.children_found.create_index([("location_structured.city", 1)])
+    await db.children_found.create_index([("location_structured.pincode", 1)])
+    await db.children_found.create_index([("location_structured.geo_point", "2dsphere")])
+    
+    # Index for location_version to support migration queries
+    await db.children.create_index([("location_version", 1)])
+    await db.children_found.create_index([("location_version", 1)])
+    
+    # Index for face_embeddings
+    await db.face_embeddings.create_index([("report_id", 1)])
+    await db.face_embeddings.create_index([("status", 1)])
+    await db.face_embeddings.create_index([("embedding_dimensions", 1)])
+
+    print("[INDEXES] MongoDB indexes ensured")

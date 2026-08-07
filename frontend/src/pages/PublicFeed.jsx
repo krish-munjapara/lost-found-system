@@ -75,20 +75,22 @@ const PublicChildCard = ({ child, index, onShare, isHighlighted }) => {
       }`}
       style={{ animationDelay: `${index * 0.06}s` }}
     >
-      {/* Image + Status Overlay */}
+          {/* Image + Status Overlay */}
       <div className="aspect-[4/3] bg-gradient-to-br from-slate-100 to-slate-200 relative overflow-hidden">
-        {child.image ? (
+        {(child.image_url || child.image) ? (
           <img
-            src={`/uploads/lost/${child.image}`}
+            src={child.image_url || child.image}
             alt={child.name}
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+            onError={(e) => {
+              e.currentTarget.style.display = "none";
+            }}
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-slate-300">
             <User className="w-20 h-20" />
           </div>
         )}
-
         {/* Urgent badge */}
         <div className="absolute top-3 left-3 flex items-center gap-2">
           <span className="bg-red-500 text-white text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-lg shadow-lg flex items-center gap-1">
@@ -180,12 +182,16 @@ const PublicFeed = () => {
   const [searchParams] = useSearchParams();
   const highlightId = searchParams.get('highlight');
 
-  // Load data
+  // Load feed when page changes
   useEffect(() => {
     loadFeed();
+  }, [page]);
+
+  // Load stats and alerts once when component mounts
+  useEffect(() => {
     loadStats();
     loadAlerts();
-  }, [page]);
+  }, []);
 
   const loadFeed = async () => {
     setLoading(true);
@@ -221,8 +227,11 @@ const PublicFeed = () => {
 
   const handleSearch = (e) => {
     e.preventDefault();
-    setPage(1);
-    loadFeed();
+    if (page === 1) {
+      loadFeed();
+    } else {
+      setPage(1);
+    }
   };
 
   return (

@@ -6,18 +6,15 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-<<<<<<< HEAD
 from fastapi.staticfiles import StaticFiles
-=======
 from fastapi.responses import RedirectResponse
 from passlib.context import CryptContext
->>>>>>> krish-dev
-
 from app.database import connect_db, close_db, get_db
 from app.database.indexes import ensure_indexes
 from app.routes import (
     auth_router, admin_router, children_router,
     report_router, match_router, user_router, public_router,
+    intelligence_router,
 )
 from app.config import (
     DEFAULT_ADMIN_EMAIL, DEFAULT_ADMIN_PASSWORD,
@@ -32,17 +29,16 @@ from app.utils.passwords import hash_password
 async def lifespan(app: FastAPI):
     await connect_db()
     await ensure_indexes()
-<<<<<<< HEAD
+
     try:
         await create_default_admin()
     except Exception as exc:
-        print(f"⚠️ Default admin initialization failed: {exc}")
-    print(f"🚀 {APP_NAME} v{APP_VERSION} is ready!")
-=======
-    await create_default_admin()
-    print(f"{APP_NAME} v{APP_VERSION} is ready!")
->>>>>>> krish-dev
+        print(f"[MAIN] Default admin initialization failed: {exc}")
+
+    print(f"[MAIN] {APP_NAME} v{APP_VERSION} is ready!")
+
     yield
+
     await close_db()
 
 
@@ -98,6 +94,7 @@ app.include_router(children_router)
 app.include_router(report_router)
 app.include_router(match_router)
 app.include_router(admin_router)
+app.include_router(intelligence_router)
 
 
 @app.get("/uploads/{folder}/{filename}", tags=["Uploads"])

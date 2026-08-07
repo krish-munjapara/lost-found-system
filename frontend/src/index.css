@@ -62,3 +62,9 @@
   50% { box-shadow: 0 0 10px rgba(239, 68, 68, 0.6), 0 0 30px rgba(239, 68, 68, 0.3); }
 }
 .animate-glow-pulse { animation: glowPulse 2s ease-in-out infinite; }
+
+@keyframes fadeIn {
+  0% { opacity: 0; transform: translateY(10px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+.animate-fadeIn { animation: fadeIn 0.5s ease-out both; }

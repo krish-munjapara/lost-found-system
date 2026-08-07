@@ -13,6 +13,7 @@ from app.services import upload_image
 from app.services.embedding_service import create_embedding_record_for_report
 from app.services.matching_service import run_matching_for_report
 from app.dependencies import get_current_user
+from app.models.location_model import Location
 
 router = APIRouter(prefix="/api/children", tags=["Children"])
 
@@ -23,9 +24,16 @@ PRIVATE_PROJECTION = {"encoding": 0}
 async def report_lost(
     background_tasks: BackgroundTasks,
     child_name: str = Form(...),
-    age: str = Form(...),
+    age: int = Form(..., ge=0, le=18),
     gender: str = Form(...),
-    location: str = Form(...),
+    country: str = Form(default="India"),
+    state: str = Form(...),
+    district: str = Form(default=""),
+    city: str = Form(...),
+    address: str = Form(default=""),
+    pincode: str = Form(default=""),
+    latitude: float = Form(default=None),
+    longitude: float = Form(default=None),
     description: str = Form(...),
     photo: UploadFile = File(...),
     current_user: dict = Depends(get_current_user),
@@ -39,11 +47,36 @@ async def report_lost(
     folder = "lost"
     storage = upload_image(compressed, folder, filename)
 
+    # Build structured location
+    location_structured = Location(
+        country=country,
+        state=state,
+        district=district if district else None,
+        city=city,
+        address=address if address else None,
+        pincode=pincode if pincode else None,
+        latitude=latitude,
+        longitude=longitude
+    )
+    
+    # Build geo_point if coordinates provided
+    geo_point = None
+    if latitude is not None and longitude is not None:
+        geo_point = {
+            "type": "Point",
+            "coordinates": [longitude, latitude]
+        }
+
     child_doc = {
         "name": child_name,
-        "age": age,
+        "age": str(age),  # Store as string for backward compatibility
         "gender": gender,
-        "location": location,
+        "location": location_structured.to_legacy_string(),  # Legacy field
+        "location_structured": {
+            **location_structured.model_dump(),
+            "geo_point": geo_point
+        },
+        "location_version": 2,  # New schema version
         "description": description,
         "image_url": storage["image_url"],
         "public_id": storage["public_id"],
@@ -59,8 +92,8 @@ async def report_lost(
         "type": "new_report",
         "message": f"New missing child reported: {child_name}",
         "child_name": child_name,
-        "child_age": age,
-        "child_location": location,
+        "child_age": str(age),
+        "child_location": location_structured.to_legacy_string(),
         "reporter_email": reporter_email,
         "created_at": get_timestamp(),
     })
@@ -97,9 +130,16 @@ async def report_lost(
 async def report_found(
     background_tasks: BackgroundTasks,
     child_name: str = Form(default="Unknown"),
-    age: str = Form(...),
+    age: int = Form(..., ge=0, le=18),
     gender: str = Form(...),
-    location: str = Form(...),
+    country: str = Form(default="India"),
+    state: str = Form(...),
+    district: str = Form(default=""),
+    city: str = Form(...),
+    address: str = Form(default=""),
+    pincode: str = Form(default=""),
+    latitude: float = Form(default=None),
+    longitude: float = Form(default=None),
     description: str = Form(...),
     photo: UploadFile = File(...),
     current_user: dict = Depends(get_current_user),
@@ -113,11 +153,34 @@ async def report_found(
     folder = "found"
     storage = upload_image(compressed, folder, filename)
 
+    location_structured = Location(
+        country=country,
+        state=state,
+        district=district if district else None,
+        city=city,
+        address=address if address else None,
+        pincode=pincode if pincode else None,
+        latitude=latitude,
+        longitude=longitude
+    )
+    
+    geo_point = None
+    if latitude is not None and longitude is not None:
+        geo_point = {
+            "type": "Point",
+            "coordinates": [longitude, latitude]
+        }
+
     found_doc = {
         "name": child_name,
-        "age": age,
+        "age": str(age),
         "gender": gender,
-        "location": location,
+        "location": location_structured.to_legacy_string(),
+        "location_structured": {
+            **location_structured.model_dump(),
+            "geo_point": geo_point
+        },
+        "location_version": 2,
         "description": description,
         "image_url": storage["image_url"],
         "public_id": storage["public_id"],

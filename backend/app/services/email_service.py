@@ -35,7 +35,7 @@ def _send_email(to_email: str, subject: str, html_body: str, text_body: str) -> 
             server.sendmail(SMTP_FROM, [to_email], msg.as_string())
         return True
     except Exception as exc:
-        print(f"❌ Email send failed: {exc}")
+        print(f"[EMAIL] Email send failed: {exc}")
         return False
 
 

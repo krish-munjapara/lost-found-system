@@ -1,0 +1,17 @@
+<svg width="400" height="300" viewBox="0 0 400 300" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="400" height="300" fill="#F1F5F9"/>
+  <rect width="400" height="300" fill="url(#gradient)"/>
+  <circle cx="200" cy="120" r="50" fill="#3B82F6" fill-opacity="0.2"/>
+  <path d="M175 95H225V145H175V95Z" fill="#3B82F6"/>
+  <path d="M185 105H215V115H185V105Z" fill="white"/>
+  <path d="M185 120H215V125H185V120Z" fill="white"/>
+  <path d="M185 128H205V133H185V128Z" fill="white"/>
+  <text x="200" y="200" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="#1E293B" text-anchor="middle">Guardian Link</text>
+  <text x="200" y="225" font-family="Arial, sans-serif" font-size="12" fill="#64748B" text-anchor="middle">Child Safety News</text>
+  <defs>
+    <linearGradient id="gradient" x1="0" y1="0" x2="400" y2="300" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#EFF6FF"/>
+      <stop offset="1" stop-color="#DBEAFE"/>
+    </linearGradient>
+  </defs>
+</svg>

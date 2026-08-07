@@ -87,28 +87,36 @@ const ShareModal = ({ child, isOpen, onClose }) => {
           </div>
         </div>
 
-        {/* Child Preview */}
-        <div className="p-5 border-b border-slate-100">
-          <div className="flex items-center gap-4">
-            {child.image ? (
-              <img
-                src={`/uploads/lost/${child.image}`}
-                alt={child.name}
-                className="w-16 h-16 rounded-xl object-cover shadow-md"
-              />
-            ) : (
-              <div className="w-16 h-16 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 text-2xl">
-                👤
+                {/* Child Preview */}
+          <div className="p-5 border-b border-slate-100">
+            <div className="flex items-center gap-4">
+              {(child.image_url || child.image) ? (
+                <img
+                  src={child.image_url || child.image}
+                  alt={child.name}
+                  className="w-16 h-16 rounded-xl object-cover shadow-md"
+                  onError={(e) => {
+                    e.target.style.display = "none";
+                  }}
+                />
+              ) : (
+                <div className="w-16 h-16 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 text-2xl">
+                  👤
+                </div>
+              )}
+              <div>
+                <h4 className="font-bold text-slate-800">{child.name}</h4>
+                <p className="text-sm text-slate-500">
+                  Age: {child.age} • {child.gender}
+                </p>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  📍 {child.location}
+                </p>
               </div>
-            )}
-            <div>
-              <h4 className="font-bold text-slate-800">{child.name}</h4>
-              <p className="text-sm text-slate-500">Age: {child.age} • {child.gender}</p>
-              <p className="text-xs text-slate-400 mt-0.5">📍 {child.location}</p>
             </div>
           </div>
-        </div>
 
+          
         {/* Share Buttons */}
         <div className="p-5 space-y-3">
           <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Share via</p>

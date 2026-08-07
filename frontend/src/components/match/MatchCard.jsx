@@ -146,10 +146,13 @@ const MatchCard = ({ match, index = 0, onStatusChange }) => {
     );
   };
 
+  // Normalize status string for safe check
+  const normalizedStatus = status?.toLowerCase() || '';
+
   // Determine display-friendly status label
-  const displayStatus = status === 'pending_review' ? 'Pending Review'
-    : status === 'confirmed' ? 'Confirmed'
-    : status === 'rejected' ? 'Rejected'
+  const displayStatus = (normalizedStatus === 'pending' || normalizedStatus === 'pending_review') ? 'Pending Review'
+    : normalizedStatus === 'confirmed' ? 'Confirmed'
+    : normalizedStatus === 'rejected' ? 'Rejected'
     : status || 'Unknown';
 
   const missingPerson = missing || resolvedMissing || { name: 'Unknown', age: 'N/A', location: 'Unknown' };
@@ -158,8 +161,8 @@ const MatchCard = ({ match, index = 0, onStatusChange }) => {
   return (
     <div
       className={`bg-white rounded-2xl border ${
-        status === 'confirmed' ? 'border-green-300 ring-2 ring-green-100' :
-        status === 'rejected' ? 'border-red-300 opacity-50' :
+        normalizedStatus === 'confirmed' ? 'border-green-300 ring-2 ring-green-100' :
+        normalizedStatus === 'rejected' ? 'border-red-300 opacity-50' :
         'border-slate-200'
       } shadow-sm flex flex-col hover:shadow-md transition-all animate-slideUp`}
       style={{ animationDelay: `${index * 0.1}s` }}
@@ -180,12 +183,12 @@ const MatchCard = ({ match, index = 0, onStatusChange }) => {
       {/* Match Status Banner */}
       <div className="px-6 py-3 border-b flex items-center justify-between bg-slate-50 rounded-t-2xl">
         <div className="flex items-center gap-2">
-          {status === 'confirmed' && <CheckCircle className="w-4 h-4 text-green-600" />}
-          {status === 'rejected' && <XCircle className="w-4 h-4 text-red-600" />}
-          {status === 'pending_review' && <AlertCircle className="w-4 h-4 text-amber-500" />}
+          {normalizedStatus === 'confirmed' && <CheckCircle className="w-4 h-4 text-green-600" />}
+          {normalizedStatus === 'rejected' && <XCircle className="w-4 h-4 text-red-600" />}
+          {(normalizedStatus === 'pending' || normalizedStatus === 'pending_review') && <AlertCircle className="w-4 h-4 text-amber-500" />}
           <span className={`text-xs font-bold uppercase tracking-wider ${
-            status === 'confirmed' ? 'text-green-700' :
-            status === 'rejected' ? 'text-red-700' :
+            normalizedStatus === 'confirmed' ? 'text-green-700' :
+            normalizedStatus === 'rejected' ? 'text-red-700' :
             'text-amber-600'
           }`}>
             {displayStatus} Match
@@ -240,12 +243,12 @@ const MatchCard = ({ match, index = 0, onStatusChange }) => {
           </div>
         </div>
 
-        {/* Found Person */}
+        {/* Found Child */}
         <PersonCard person={foundPerson} label="Found" folder="found" bgColor="bg-green-100 text-green-700" />
       </div>
 
       {/* Admin Review Actions */}
-      {isAdmin && status === 'pending_review' && (
+      {isAdmin && (normalizedStatus === 'pending' || normalizedStatus === 'pending_review') && (
         <div className="p-4 bg-slate-50 border-t border-slate-200 rounded-b-2xl flex items-center justify-end gap-3">
           <button
             onClick={handleReject}

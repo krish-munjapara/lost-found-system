@@ -5,6 +5,7 @@ Pydantic schemas for missing and found children data.
 
 from pydantic import BaseModel, Field
 from typing import Optional
+from .location_model import Location
 
 
 # ──────────────────────────────────────────────
@@ -13,9 +14,9 @@ from typing import Optional
 class ChildReport(BaseModel):
     """Schema for reporting a missing or found child."""
     child_name: str = Field(..., min_length=1, max_length=100)
-    age: str = Field(..., min_length=1)
+    age: int = Field(..., ge=0, le=18, description="Child age in years")
     gender: str = Field(..., pattern="^(Male|Female|Other)$")
-    location: str = Field(..., min_length=2)
+    location_structured: Location = Field(..., description="Structured location data")
     description: str = Field(..., min_length=5)
 
 
@@ -26,9 +27,11 @@ class ChildResponse(BaseModel):
     """Schema for child data in API responses."""
     id: str
     name: str
-    age: str
+    age: str  # Keep as string for backward compatibility
     gender: str
-    location: str
+    location: str  # Legacy field (retained)
+    location_structured: Optional[Location] = None  # New field
+    location_version: int = Field(default=1, description="Schema version: 1=legacy, 2=structured")
     description: str
     image: Optional[str] = None
     status: Optional[str] = None

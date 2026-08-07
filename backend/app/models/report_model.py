@@ -6,15 +6,16 @@ Pydantic schemas for reports and notifications.
 from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import datetime
+from .location_model import Location
 
 
 class ReportCreate(BaseModel):
     """Schema for creating a report."""
     report_type: str = Field(..., pattern="^(missing|found)$")
     child_name: str
-    age: str
+    age: int = Field(..., ge=0, le=18)
     gender: str
-    location: str
+    location_structured: Location
     description: str
 
 
@@ -25,7 +26,9 @@ class ReportResponse(BaseModel):
     child_name: str
     age: str
     gender: str
-    location: str
+    location: str  # Legacy field (retained)
+    location_structured: Optional[Location] = None  # New field
+    location_version: int = Field(default=1)
     description: str
     image: Optional[str] = None
     status: str

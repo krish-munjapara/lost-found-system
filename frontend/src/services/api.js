@@ -308,15 +308,36 @@ export const adminApi = {
 };
 
 export const publicApi = {
-  getFeed: async (page = 1, search = '') => {
+  getFeed: async (page = 1, search = '', filters = {}) => {
     const params = new URLSearchParams({ page: String(page), limit: '20' });
     if (search) params.set('search', search);
+    if (filters.status) params.set('status', filters.status);
+    if (filters.gender) params.set('gender', filters.gender);
+    if (filters.age) params.set('age', filters.age);
+    if (filters.state) params.set('state', filters.state);
+    if (filters.city) params.set('city', filters.city);
+    if (filters.date) params.set('date', filters.date);
+    if (filters.sort) params.set('sort', filters.sort);
     const res = await fetch(`${API_BASE}/public/feed?${params}`);
     return handleResponse(res, true);
   },
   getChild: async (id) => handleResponse(await fetch(`${API_BASE}/public/child/${id}`), true),
   getStats: async () => handleResponse(await fetch(`${API_BASE}/public/stats`), true),
   getRecentAlerts: async () => handleResponse(await fetch(`${API_BASE}/public/recent-alerts`), true),
+  getNews: async (page = 1, limit = 20, category = 'all', search = null) => {
+    const params = new URLSearchParams({ 
+      page: String(page), 
+      limit: String(limit),
+      category: category
+    });
+    if (search) params.set('search', search);
+    const res = await fetch(`${API_BASE}/public/news?${params}`);
+    return handleResponse(res, true);
+  },
+  getIntelligenceMap: async () => {
+    const res = await fetch(`${API_BASE}/public/map`);
+    return handleResponse(res, true);
+  },
 };
 
 export const shareUtils = {
