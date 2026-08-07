@@ -4,6 +4,8 @@ Guardian-Link Feed Fetcher
 RSS feed fetching and parsing service with error handling and retry logic.
 """
 
+import logging
+import os
 import feedparser
 import httpx
 from typing import List, Dict, Optional
@@ -13,13 +15,23 @@ from dateutil import parser
 
 from .config import NEWS_SOURCES, RELEVANT_KEYWORDS, REJECT_KEYWORDS, NewsCategory
 
+logger = logging.getLogger(__name__)
+
 
 class FeedFetcher:
     """Fetches and parses RSS feeds from configured news sources."""
     
     def __init__(self):
         self.sources = [s for s in NEWS_SOURCES if s.enabled]
-    
+
+    def _should_log_warning(self) -> bool:
+        environment = os.getenv("ENVIRONMENT", "development").lower()
+        return environment in {"development", "dev", "test"}
+
+    def _log_source_warning(self, source_name: str, reason: str) -> None:
+        if self._should_log_warning():
+            logger.warning("Skipping news source %s: %s", source_name, reason)
+
     async def fetch_all_feeds(self) -> List[Dict]:
         """Fetch articles from all enabled news sources."""
         all_articles = []
@@ -28,8 +40,8 @@ class FeedFetcher:
             try:
                 articles = await self.fetch_feed(source)
                 all_articles.extend(articles)
-            except Exception as e:
-                print(f"Error fetching from {source.name}: {e}")
+            except Exception as exc:
+                self._log_source_warning(source.name, str(exc) or "unavailable")
                 continue
         
         return all_articles
@@ -55,8 +67,11 @@ class FeedFetcher:
                 
                 return articles
                 
-        except Exception as e:
-            print(f"Error parsing feed {source.name}: {e}")
+        except (httpx.TimeoutException, httpx.HTTPStatusError, httpx.RequestError, ValueError, feedparser.ParseError) as exc:
+            self._log_source_warning(source.name, "feed unavailable")
+            return []
+        except Exception as exc:
+            self._log_source_warning(source.name, str(exc) or "unavailable")
             return []
     
     def _parse_entry(self, entry, source) -> Optional[Dict]:
@@ -88,8 +103,7 @@ class FeedFetcher:
                 'fetched_at': datetime.now().isoformat(),
             }
             
-        except Exception as e:
-            print(f"Error parsing entry: {e}")
+        except Exception:
             return None
     
     def _clean_html(self, text: str) -> str:
