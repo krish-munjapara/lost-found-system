@@ -94,8 +94,8 @@ def _is_age_compatible(source_age: Any, target_age: Any) -> bool:
 def _extract_location_components(location: Any) -> tuple[str | None, float | None, float | None]:
     if isinstance(location, dict):
         city = location.get("city") or location.get("name")
-        lat = location.get("lat")
-        lng = location.get("lng")
+        lat = location.get("lat") or location.get("latitude")
+        lng = location.get("lng") or location.get("longitude")
         try:
             lat_val = float(lat)
             lng_val = float(lng)
@@ -114,17 +114,45 @@ def _is_location_compatible(source_location: Any, target_location: Any) -> bool:
     source_city, source_lat, source_lng = _extract_location_components(source_location)
     target_city, target_lat, target_lng = _extract_location_components(target_location)
 
-    if not source_city and not target_city and source_lat is None and source_lng is None and target_lat is None and target_lng is None:
+    # Extract state and district for fallback comparison
+    source_state = None
+    source_district = None
+    target_state = None
+    target_district = None
+    
+    if isinstance(source_location, dict):
+        source_state = source_location.get("state")
+        source_district = source_location.get("district")
+    if isinstance(target_location, dict):
+        target_state = target_location.get("state")
+        target_district = target_location.get("district")
+
+    # If both have no location info at all, consider compatible
+    if not source_city and not target_city and source_lat is None and source_lng is None and target_lat is None and target_lng is None and not source_state and not target_state:
         return True
 
+    # City match (case-insensitive)
     if source_city and target_city:
         if str(source_city).strip().lower() == str(target_city).strip().lower():
             return True
 
+    # Geographic distance match
     if source_lat is not None and source_lng is not None and target_lat is not None and target_lng is not None:
         distance_km = _haversine_km(source_lat, source_lng, target_lat, target_lng)
         if distance_km <= MATCH_LOCATION_RADIUS_KM:
             return True
+
+    # Fallback: if no coordinates, check state and district
+    if source_lat is None or source_lng is None or target_lat is None or target_lng is None:
+        # Same state and district → compatible
+        if source_state and target_state and source_district and target_district:
+            if (str(source_state).strip().lower() == str(target_state).strip().lower() and
+                str(source_district).strip().lower() == str(target_district).strip().lower()):
+                return True
+        # Same state only → compatible (more lenient)
+        if source_state and target_state:
+            if str(source_state).strip().lower() == str(target_state).strip().lower():
+                return True
 
     return False
 
@@ -223,7 +251,7 @@ async def filter_candidate_reports(
                 source_report_type=report_type,
             )
             continue
-        if not _is_location_compatible(source_report.get("location"), candidate.get("location")):
+        if not _is_location_compatible(source_report.get("location_structured"), candidate.get("location_structured")):
             log_event(
                 "Rejected Reason",
                 report_id=report_id,

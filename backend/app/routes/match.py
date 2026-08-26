@@ -32,38 +32,59 @@ router = APIRouter(prefix="/api/matches", tags=["Matches"])
 # ──────────────────────────────────────────────
 @router.get("/")
 async def get_matches(current_user: dict = Depends(get_current_user)):
-    """Return all stored match documents for authenticated users, with debug logging."""
+    """Return all stored match documents for authenticated users, with child details populated."""
     db = get_db()
-    collection_name = "matches"
-    query = {}
+    is_admin = current_user.get("role") == "Admin"
+    user_email = current_user["email"]
 
-    print(f"MongoDB collection being queried: {collection_name}")
-    print(f"Exact query: {query}")
-    print(f"current_user: {current_user}")
-    print(f"user role: {current_user.get('role')}")
-
-    total_documents = await db.matches.count_documents({})
-    print(f"Total documents in db.matches: {total_documents}")
+    # Build query based on user role
+    if is_admin:
+        query = {}
+    else:
+        query = {
+            "$or": [
+                {"missing_reporter": user_email},
+                {"found_reporter": user_email},
+            ]
+        }
 
     matches = await db.matches.find(query).sort("created_at", -1).to_list(None)
-    print(f"Documents returned before filtering: {matches}")
 
-    filtered_matches = matches
-    print(f"Documents returned after filtering: {filtered_matches}")
+    # Populate child details for each match
+    populated_matches = []
+    for match in matches:
+        # Safely get IDs - skip legacy matches without required IDs
+        missing_id = match.get("missing_id") or match.get("missing_report_id")
+        found_id = match.get("found_id") or match.get("found_report_id")
+        
+        # Skip matches without valid IDs (legacy/malformed records)
+        if not missing_id or not found_id:
+            continue
+        
+        # Fetch child details
+        missing_child = await db.children.find_one({"_id": missing_id})
+        found_child = await db.children_found.find_one({"_id": found_id})
 
-    def _convert_object_ids(value):
-        if isinstance(value, ObjectId):
-            return str(value)
-        if isinstance(value, dict):
-            return {key: _convert_object_ids(item) for key, item in value.items()}
-        if isinstance(value, list):
-            return [_convert_object_ids(item) for item in value]
-        return value
+        conf_label = match.get("confidence_label")
+        if not conf_label:
+            conf_label, _ = get_confidence_level(match.get("score") or match.get("similarity_score") or 0)
 
-    serialized_matches = [_convert_object_ids(match) for match in filtered_matches]
-    print(f"Total matches in MongoDB: {total_documents}")
-    print(f"Matches returned by API: {serialized_matches}")
-    return serialized_matches
+        populated_match = {
+            "id": str(match["_id"]),
+            "score": match.get("score") or match.get("similarity_score") or 0,
+            "confidence_label": conf_label,
+            "status": match.get("status", "Pending"),
+            "timestamp": match.get("created_at", ""),
+            "missing_id": str(missing_id),
+            "found_id": str(found_id),
+            "missing_reporter": match.get("missing_reporter", ""),
+            "found_reporter": match.get("found_reporter", ""),
+            "missing": serialize_doc(missing_child) if missing_child else None,
+            "found": serialize_doc(found_child) if found_child else None,
+        }
+        populated_matches.append(populated_match)
+
+    return populated_matches
 
 
 # ──────────────────────────────────────────────
@@ -92,17 +113,25 @@ async def get_match_detail(match_id: str, current_user: dict = Depends(get_curre
         if match.get("missing_reporter") != user_email and match.get("found_reporter") != user_email:
             raise HTTPException(status_code=403, detail="Access denied")
 
-    missing_child = await db.children.find_one({"_id": match["missing_id"]})
-    found_child = await db.children_found.find_one({"_id": match["found_id"]})
+    # Safely get IDs - support both naming conventions
+    missing_id = match.get("missing_id") or match.get("missing_report_id")
+    found_id = match.get("found_id") or match.get("found_report_id")
+    
+    # Reject if match doesn't have valid IDs
+    if not missing_id or not found_id:
+        raise HTTPException(status_code=400, detail="Invalid match: missing required IDs")
+
+    missing_child = await db.children.find_one({"_id": missing_id})
+    found_child = await db.children_found.find_one({"_id": found_id})
 
     conf_label = match.get("confidence_label")
     conf_class = match.get("confidence_class")
     if not conf_label:
-        conf_label, conf_class = get_confidence_level(match["score"])
+        conf_label, conf_class = get_confidence_level(match.get("score") or match.get("similarity_score") or 0)
 
     return {
         "id": str(match["_id"]),
-        "score": match["score"],
+        "score": match.get("score") or match.get("similarity_score") or 0,
         "confidence_label": conf_label,
         "confidence_class": conf_class,
         "status": match.get("status", "Pending"),
@@ -294,6 +323,9 @@ async def reject_match(
     if not match:
         raise HTTPException(status_code=404, detail="Match not found")
 
+    # Safely get IDs - support both naming conventions
+    missing_id = match.get("missing_id") or match.get("missing_report_id")
+    
     # Update match status
     await db.matches.update_one(
         {"_id": oid},
@@ -304,11 +336,12 @@ async def reject_match(
         }}
     )
 
-    # Revert the missing child status back to Pending
-    await db.children.update_one(
-        {"_id": match["missing_id"]},
-        {"$set": {"status": "Pending"}}
-    )
+    # Revert the missing child status back to Pending (if ID exists)
+    if missing_id:
+        await db.children.update_one(
+            {"_id": missing_id},
+            {"$set": {"status": "Pending"}}
+        )
 
     # Notify users about the rejection
     timestamp = get_timestamp()

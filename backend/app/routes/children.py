@@ -2,6 +2,8 @@
 Guardian-Link Children Routes
 """
 
+from datetime import datetime
+
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, status, BackgroundTasks
 
 from app.database import get_db
@@ -20,6 +22,34 @@ router = APIRouter(prefix="/api/children", tags=["Children"])
 PRIVATE_PROJECTION = {"encoding": 0}
 
 
+def _optional_form_float(value: str | None) -> float | None:
+    if value is None or not str(value).strip():
+        return None
+    try:
+        return float(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def _parse_report_date(value: str | None, field_label: str) -> datetime:
+    if not value or not str(value).strip():
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"{field_label} is required",
+        )
+    raw = str(value).strip()
+    try:
+        if "T" in raw:
+            normalized = raw.replace("Z", "+00:00")
+            return datetime.fromisoformat(normalized)
+        return datetime.strptime(raw[:10], "%Y-%m-%d")
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Invalid {field_label} format. Use YYYY-MM-DD.",
+        ) from exc
+
+
 @router.post("/report-lost")
 async def report_lost(
     background_tasks: BackgroundTasks,
@@ -32,14 +62,18 @@ async def report_lost(
     city: str = Form(...),
     address: str = Form(default=""),
     pincode: str = Form(default=""),
-    latitude: float = Form(default=None),
-    longitude: float = Form(default=None),
+    latitude: str = Form(default=""),
+    longitude: str = Form(default=""),
+    date_missing: str = Form(...),
     description: str = Form(...),
     photo: UploadFile = File(...),
     current_user: dict = Depends(get_current_user),
 ):
     db = get_db()
     reporter_email = current_user["email"]
+    lat = _optional_form_float(latitude)
+    lng = _optional_form_float(longitude)
+    missing_at = _parse_report_date(date_missing, "date_missing")
 
     raw, content_type = await read_and_validate_upload(photo)
     compressed = compress_image(raw)
@@ -55,16 +89,16 @@ async def report_lost(
         city=city,
         address=address if address else None,
         pincode=pincode if pincode else None,
-        latitude=latitude,
-        longitude=longitude
+        latitude=lat,
+        longitude=lng,
     )
     
     # Build geo_point if coordinates provided
     geo_point = None
-    if latitude is not None and longitude is not None:
+    if lat is not None and lng is not None:
         geo_point = {
             "type": "Point",
-            "coordinates": [longitude, latitude]
+            "coordinates": [lng, lat]
         }
 
     child_doc = {
@@ -77,6 +111,7 @@ async def report_lost(
             "geo_point": geo_point
         },
         "location_version": 2,  # New schema version
+        "date_missing": missing_at,
         "description": description,
         "image_url": storage["image_url"],
         "public_id": storage["public_id"],
@@ -138,14 +173,19 @@ async def report_found(
     city: str = Form(...),
     address: str = Form(default=""),
     pincode: str = Form(default=""),
-    latitude: float = Form(default=None),
-    longitude: float = Form(default=None),
+    latitude: str = Form(default=""),
+    longitude: str = Form(default=""),
+    date_found: str = Form(...),
     description: str = Form(...),
     photo: UploadFile = File(...),
     current_user: dict = Depends(get_current_user),
 ):
     db = get_db()
     reporter_email = current_user["email"]
+    lat = _optional_form_float(latitude)
+    lng = _optional_form_float(longitude)
+    found_at = _parse_report_date(date_found, "date_found")
+    resolved_name = child_name.strip() if child_name and child_name.strip() else "Unknown"
 
     raw, content_type = await read_and_validate_upload(photo)
     compressed = compress_image(raw)
@@ -160,19 +200,19 @@ async def report_found(
         city=city,
         address=address if address else None,
         pincode=pincode if pincode else None,
-        latitude=latitude,
-        longitude=longitude
+        latitude=lat,
+        longitude=lng,
     )
     
     geo_point = None
-    if latitude is not None and longitude is not None:
+    if lat is not None and lng is not None:
         geo_point = {
             "type": "Point",
-            "coordinates": [longitude, latitude]
+            "coordinates": [lng, lat]
         }
 
     found_doc = {
-        "name": child_name,
+        "name": resolved_name,
         "age": str(age),
         "gender": gender,
         "location": location_structured.to_legacy_string(),
@@ -181,6 +221,7 @@ async def report_found(
             "geo_point": geo_point
         },
         "location_version": 2,
+        "date_found": found_at,
         "description": description,
         "image_url": storage["image_url"],
         "public_id": storage["public_id"],

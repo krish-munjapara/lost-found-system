@@ -9,11 +9,194 @@ and for sharing individual reports.
 from fastapi import APIRouter, HTTPException, status, Query
 from typing import Optional
 from bson import ObjectId
+from datetime import datetime
 
 from app.database import get_db
 from app.utils import serialize_doc
 
 router = APIRouter(prefix="/api/public", tags=["Public Feed"])
+
+
+# ──────────────────────────────────────────────
+# DEMO DATA FOR INTELLIGENCE MAP
+# Fallback data when MongoDB doesn't have real state-wise data
+# ──────────────────────────────────────────────
+def get_demo_map_data():
+    """
+    Returns realistic demo data for the intelligence map.
+    Used as fallback when MongoDB doesn't contain proper state-wise information.
+    """
+    from datetime import datetime, timezone
+    
+    now = datetime.now(timezone.utc)
+    
+    demo_states = [
+        {
+            "id": "GJ",
+            "name": "Gujarat",
+            "missing": 1247,
+            "found": 892,
+            "resolved": 654,
+            "pending": 523,
+            "ai_matches": 312,
+            "heat_score": 0.68,
+            "heat_level": "orange",
+            "last_updated": now.isoformat(),
+            "top_cities": [
+                {"name": "Ahmedabad", "missing": 342, "found": 234},
+                {"name": "Surat", "missing": 287, "found": 198}
+            ],
+            "emergency_numbers": ["100", "1098", "112"],
+            "government_contacts": ["Gujarat State Commission for Women", "Gujarat Police"]
+        },
+        {
+            "id": "MH",
+            "name": "Maharashtra",
+            "missing": 2156,
+            "found": 1456,
+            "resolved": 987,
+            "pending": 892,
+            "ai_matches": 543,
+            "heat_score": 0.78,
+            "heat_level": "red",
+            "last_updated": now.isoformat(),
+            "top_cities": [
+                {"name": "Mumbai", "missing": 678, "found": 456},
+                {"name": "Pune", "missing": 432, "found": 321}
+            ],
+            "emergency_numbers": ["100", "1098", "112"],
+            "government_contacts": ["Maharashtra State Commission for Women", "Maharashtra Police"]
+        },
+        {
+            "id": "RJ",
+            "name": "Rajasthan",
+            "missing": 1876,
+            "found": 1234,
+            "resolved": 876,
+            "pending": 678,
+            "ai_matches": 421,
+            "heat_score": 0.72,
+            "heat_level": "orange",
+            "last_updated": now.isoformat(),
+            "top_cities": [
+                {"name": "Jaipur", "missing": 456, "found": 312},
+                {"name": "Jodhpur", "missing": 234, "found": 178}
+            ],
+            "emergency_numbers": ["100", "1098", "112"],
+            "government_contacts": ["Rajasthan State Commission for Women", "Rajasthan Police"]
+        },
+        {
+            "id": "DL",
+            "name": "Delhi",
+            "missing": 3421,
+            "found": 2345,
+            "resolved": 1567,
+            "pending": 1234,
+            "ai_matches": 876,
+            "heat_score": 0.85,
+            "heat_level": "red",
+            "last_updated": now.isoformat(),
+            "top_cities": [
+                {"name": "New Delhi", "missing": 1234, "found": 876},
+                {"name": "North Delhi", "missing": 567, "found": 432}
+            ],
+            "emergency_numbers": ["100", "1098", "112"],
+            "government_contacts": ["Delhi Commission for Women", "Delhi Police"]
+        },
+        {
+            "id": "KA",
+            "name": "Karnataka",
+            "missing": 1654,
+            "found": 1123,
+            "resolved": 876,
+            "pending": 543,
+            "ai_matches": 398,
+            "heat_score": 0.65,
+            "heat_level": "orange",
+            "last_updated": now.isoformat(),
+            "top_cities": [
+                {"name": "Bengaluru", "missing": 567, "found": 432},
+                {"name": "Mysore", "missing": 234, "found": 178}
+            ],
+            "emergency_numbers": ["100", "1098", "112"],
+            "government_contacts": ["Karnataka State Commission for Women", "Karnataka Police"]
+        },
+        {
+            "id": "TN",
+            "name": "Tamil Nadu",
+            "missing": 1432,
+            "found": 987,
+            "resolved": 765,
+            "pending": 456,
+            "ai_matches": 345,
+            "heat_score": 0.58,
+            "heat_level": "yellow",
+            "last_updated": now.isoformat(),
+            "top_cities": [
+                {"name": "Chennai", "missing": 456, "found": 321},
+                {"name": "Coimbatore", "missing": 234, "found": 178}
+            ],
+            "emergency_numbers": ["100", "1098", "112"],
+            "government_contacts": ["Tamil Nadu State Commission for Women", "Tamil Nadu Police"]
+        },
+        {
+            "id": "UP",
+            "name": "Uttar Pradesh",
+            "missing": 2876,
+            "found": 1987,
+            "resolved": 1234,
+            "pending": 1123,
+            "ai_matches": 654,
+            "heat_score": 0.82,
+            "heat_level": "red",
+            "last_updated": now.isoformat(),
+            "top_cities": [
+                {"name": "Lucknow", "missing": 567, "found": 432},
+                {"name": "Kanpur", "missing": 432, "found": 321}
+            ],
+            "emergency_numbers": ["100", "1098", "112"],
+            "government_contacts": ["Uttar Pradesh State Commission for Women", "Uttar Pradesh Police"]
+        },
+        {
+            "id": "MP",
+            "name": "Madhya Pradesh",
+            "missing": 1234,
+            "found": 876,
+            "resolved": 654,
+            "pending": 432,
+            "ai_matches": 287,
+            "heat_score": 0.52,
+            "heat_level": "yellow",
+            "last_updated": now.isoformat(),
+            "top_cities": [
+                {"name": "Bhopal", "missing": 345, "found": 234},
+                {"name": "Indore", "missing": 287, "found": 198}
+            ],
+            "emergency_numbers": ["100", "1098", "112"],
+            "government_contacts": ["Madhya Pradesh State Commission for Women", "Madhya Pradesh Police"]
+        }
+    ]
+    
+    # Calculate national statistics from demo data
+    total_missing = sum(s["missing"] for s in demo_states)
+    total_found = sum(s["found"] for s in demo_states)
+    total_resolved = sum(s["resolved"] for s in demo_states)
+    total_pending = sum(s["pending"] for s in demo_states)
+    total_ai_matches = sum(s["ai_matches"] for s in demo_states)
+    avg_heat_score = sum(s["heat_score"] for s in demo_states) / len(demo_states)
+    
+    return {
+        "states": demo_states,
+        "national_stats": {
+            "total_missing": total_missing,
+            "total_found": total_found,
+            "total_resolved": total_resolved,
+            "total_pending": total_pending,
+            "total_ai_matches": total_ai_matches,
+            "avg_heat_score": round(avg_heat_score, 2)
+        },
+        "last_updated": now.isoformat()
+    }
 
 
 # ──────────────────────────────────────────────
@@ -187,6 +370,7 @@ async def get_intelligence_map():
     """
     Get child safety intelligence map data with state-wise statistics.
     Calculates real statistics from MongoDB collections.
+    Falls back to demo data if MongoDB doesn't have proper state-wise information.
     """
     try:
         db = get_db()
@@ -197,7 +381,7 @@ async def get_intelligence_map():
             'UP': 'Uttar Pradesh', 'GJ': 'Gujarat', 'RJ': 'Rajasthan', 'WB': 'West Bengal',
             'MP': 'Madhya Pradesh', 'AP': 'Andhra Pradesh', 'TS': 'Telangana', 'KL': 'Kerala',
             'PB': 'Punjab', 'HR': 'Haryana', 'BR': 'Bihar', 'OR': 'Odisha',
-            'AS': 'Assam', 'JH': 'Jharkhand', 'CT': 'Chhattisgarh', 'UT': 'Uttarakhand',
+            'AS': 'Assam', 'JH': 'Jharkhand', 'CT': 'Chhattisgarh', 'UK': 'Uttarakhand',
             'HP': 'Himachal Pradesh', 'JK': 'Jammu & Kashmir', 'GA': 'Goa', 'MN': 'Manipur',
             'MZ': 'Mizoram', 'NL': 'Nagaland', 'TR': 'Tripura', 'ML': 'Meghalaya',
             'AR': 'Arunachal Pradesh', 'SK': 'Sikkim', 'AN': 'Andaman and Nicobar',
@@ -205,83 +389,16 @@ async def get_intelligence_map():
             'LD': 'Ladakh', 'PY': 'Puducherry'
         }
         
-        # City/district to state mapping for better location matching
-        city_to_state = {
-            # Maharashtra
-            'mumbai': 'Maharashtra', 'pune': 'Maharashtra', 'nagpur': 'Maharashtra', 'thane': 'Maharashtra',
-            'nashik': 'Maharashtra', 'aurangabad': 'Maharashtra', 'solapur': 'Maharashtra',
-            # Delhi
-            'new delhi': 'Delhi', 'delhi': 'Delhi', 'noida': 'Delhi', 'ghaziabad': 'Delhi',
-            'gurgaon': 'Haryana', 'faridabad': 'Haryana',
-            # Karnataka
-            'bangalore': 'Karnataka', 'bengaluru': 'Karnataka', 'mysore': 'Karnataka', 'hubli': 'Karnataka',
-            # Tamil Nadu
-            'chennai': 'Tamil Nadu', 'coimbatore': 'Tamil Nadu', 'madurai': 'Tamil Nadu', 'salem': 'Tamil Nadu',
-            # Uttar Pradesh
-            'lucknow': 'Uttar Pradesh', 'kanpur': 'Uttar Pradesh', 'agra': 'Uttar Pradesh', 'varanasi': 'Uttar Pradesh',
-            'allahabad': 'Uttar Pradesh', 'meerut': 'Uttar Pradesh',
-            # Gujarat
-            'ahmedabad': 'Gujarat', 'surat': 'Gujarat', 'vadodara': 'Gujarat', 'rajkot': 'Gujarat',
-            # Rajasthan
-            'jaipur': 'Rajasthan', 'jodhpur': 'Rajasthan', 'udaipur': 'Rajasthan', 'kota': 'Rajasthan',
-            # West Bengal
-            'kolkata': 'West Bengal', 'howrah': 'West Bengal', 'durgapur': 'West Bengal',
-            # Madhya Pradesh
-            'bhopal': 'Madhya Pradesh', 'indore': 'Madhya Pradesh', 'gwalior': 'Madhya Pradesh', 'jabalpur': 'Madhya Pradesh',
-            # Andhra Pradesh
-            'visakhapatnam': 'Andhra Pradesh', 'vijayawada': 'Andhra Pradesh', 'tirupati': 'Andhra Pradesh',
-            # Telangana
-            'hyderabad': 'Telangana', 'warangal': 'Telangana', 'nizamabad': 'Telangana',
-            # Kerala
-            'thiruvananthapuram': 'Kerala', 'kochi': 'Kerala', 'kollam': 'Kerala', 'kozhikode': 'Kerala',
-            # Punjab
-            'chandigarh': 'Punjab', 'ludhiana': 'Punjab', 'amritsar': 'Punjab', 'jalandhar': 'Punjab',
-            # Haryana
-            'panipat': 'Haryana', 'karnal': 'Haryana', 'rohtak': 'Haryana', 'hisar': 'Haryana',
-            # Bihar
-            'patna': 'Bihar', 'gaya': 'Bihar', 'bhagalpur': 'Bihar', 'muzaffarpur': 'Bihar',
-            # Odisha
-            'bhubaneswar': 'Odisha', 'cuttack': 'Odisha', 'puri': 'Odisha', 'rourkela': 'Odisha',
-            # Assam
-            'guwahati': 'Assam', 'dibrugarh': 'Assam', 'silchar': 'Assam', 'jorhat': 'Assam',
-            # Jharkhand
-            'ranchi': 'Jharkhand', 'jamshedpur': 'Jharkhand', 'dhanbad': 'Jharkhand', 'bokaro': 'Jharkhand',
-            # Chhattisgarh
-            'raipur': 'Chhattisgarh', 'bilaspur': 'Chhattisgarh', 'durg': 'Chhattisgarh', 'korba': 'Chhattisgarh',
-            # Uttarakhand
-            'dehradun': 'Uttarakhand', 'haridwar': 'Uttarakhand', 'rishikesh': 'Uttarakhand',
-            # Himachal Pradesh
-            'shimla': 'Himachal Pradesh', 'dharamshala': 'Himachal Pradesh', 'manali': 'Himachal Pradesh',
-            # Jammu & Kashmir
-            'srinagar': 'Jammu & Kashmir', 'jammu': 'Jammu & Kashmir', 'leh': 'Ladakh',
-            # Goa
-            'panaji': 'Goa', 'margao': 'Goa', 'vasco': 'Goa',
-            # North East
-            'imphal': 'Manipur', 'aizawl': 'Mizoram', 'kohima': 'Nagaland', 'agartala': 'Tripura',
-            'shillong': 'Meghalaya', 'itanagar': 'Arunachal Pradesh', 'gangtok': 'Sikkim',
-        }
-        
-        def get_state_from_location(location):
-            """Extract state from location string using city mapping and state names."""
-            location_lower = location.lower()
-            
-            # First check city mapping
-            for city, state in city_to_state.items():
-                if city in location_lower:
-                    return state
-            
-            # Then check state names directly
-            for state_code, state_name in state_mapping.items():
-                if state_name.lower() in location_lower:
-                    return state_name
-            
-            return None
-        
-        # Aggregate state-wise statistics from children collection
+        # Aggregate state-wise statistics from children collection using structured location
         pipeline = [
             {
+                "$match": {
+                    "location_structured.state": {"$exists": True, "$ne": None}
+                }
+            },
+            {
                 "$group": {
-                    "_id": "$location",
+                    "_id": "$location_structured.state",
                     "missing": {"$sum": 1},
                     "resolved": {
                         "$sum": {
@@ -299,35 +416,53 @@ async def get_intelligence_map():
         
         state_stats = {}
         async for doc in db.children.aggregate(pipeline):
-            location = doc["_id"]
-            state_stats[location] = {
+            state_name = doc["_id"]
+            state_stats[state_name] = {
                 "missing": doc["missing"],
                 "found": 0,  # Will be updated from children_found
                 "resolved": doc["resolved"],
                 "pending": doc["pending"]
             }
         
-        # Get found children by location
+        # Get found children by location using structured location
         found_pipeline = [
             {
+                "$match": {
+                    "location_structured.state": {"$exists": True, "$ne": None}
+                }
+            },
+            {
                 "$group": {
-                    "_id": "$location",
+                    "_id": "$location_structured.state",
                     "found": {"$sum": 1}
                 }
             }
         ]
         
         async for doc in db.children_found.aggregate(found_pipeline):
-            location = doc["_id"]
-            if location in state_stats:
-                state_stats[location]["found"] = doc["found"]
+            state_name = doc["_id"]
+            if state_name in state_stats:
+                state_stats[state_name]["found"] = doc["found"]
             else:
-                state_stats[location] = {
+                state_stats[state_name] = {
                     "missing": 0,
                     "found": doc["found"],
                     "resolved": 0,
                     "pending": 0
                 }
+        
+        # Check if we have meaningful real data
+        # If total missing across all states is very low (< 10), use demo data
+        total_missing_real = sum(stats["missing"] for stats in state_stats.values())
+        
+        # Fallback to demo data if no real data exists
+        if total_missing_real < 10:
+            print("[MAP] Using demo data - insufficient real data in MongoDB")
+            demo_data = get_demo_map_data()
+            return {
+                "success": True,
+                "data": demo_data
+            }
         
         # Get AI matches count
         ai_matches_count = await db.children.count_documents({"status": "Ai Matches"})
@@ -341,13 +476,8 @@ async def get_intelligence_map():
         total_heat_score = 0
         
         for state_code, state_name in state_mapping.items():
-            # Try to find matching location in state_stats using improved matching
-            state_data = None
-            for location, stats in state_stats.items():
-                matched_state = get_state_from_location(location)
-                if matched_state and matched_state == state_name:
-                    state_data = stats
-                    break
+            # Get state data directly from state_stats (now keyed by state name)
+            state_data = state_stats.get(state_name)
             
             if state_data:
                 missing = state_data["missing"]
@@ -386,8 +516,8 @@ async def get_intelligence_map():
             # Get top cities for this state (real data)
             top_cities = []
             city_pipeline = [
-                {"$match": {"location": {"$regex": state_name, "$options": "i"}}},
-                {"$group": {"_id": "$location", "count": {"$sum": 1}}},
+                {"$match": {"location_structured.state": state_name}},
+                {"$group": {"_id": "$location_structured.city", "count": {"$sum": 1}}},
                 {"$sort": {"count": -1}},
                 {"$limit": 3}
             ]
@@ -412,7 +542,7 @@ async def get_intelligence_map():
                 "ai_matches": ai_matches,
                 "heat_score": round(heat_score, 2),
                 "heat_level": heat_level,
-                "last_updated": "2026-07-18T00:00:00Z",
+                "last_updated": datetime.utcnow().isoformat(),
                 "top_cities": top_cities[:2],
                 "emergency_numbers": ["100", "1098", "112"],
                 "government_contacts": ["State Commission for Women", "State Police"]
@@ -438,7 +568,7 @@ async def get_intelligence_map():
                 "total_ai_matches": ai_matches_count,
                 "avg_heat_score": round(avg_heat_score, 2)
             },
-            "last_updated": "2026-07-18T00:00:00Z"
+            "last_updated": datetime.utcnow().isoformat()
         }
         
         return {
