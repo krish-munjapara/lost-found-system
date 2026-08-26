@@ -324,6 +324,10 @@ async def run_matching_for_report(
     max_matches: int = TOP_MATCH_LIMIT,
 ) -> list[dict[str, Any]]:
     """Create ranked embedding-based match candidates for a report."""
+    print(f"[MATCHING_START]")
+    print(f"report_id={report_id}")
+    print(f"report_type={report_type}")
+    
     db = get_db()
 
     if report_type not in {"missing", "found"}:
@@ -336,24 +340,21 @@ async def run_matching_for_report(
 
     source_report = await db[report_collection_name].find_one({"_id": report_obj_id})
     if not source_report:
-        print("Report not found")
+        print(f"[MATCHING_ERROR] report_not_found")
+        print(f"[MATCHING_COMPLETE]")
         return []
 
-    print("Report loaded successfully.")
+    print(f"[MATCHING_REPORT_LOADED]")
+    print(f"report_id={report_id}")
 
     source_embedding = await _get_embedding_for_report(db, report_id)
     if not source_embedding:
-        print("Embedding loaded.")
-        print(f"embedding_id=None")
-        print(f"embedding_length=0")
-        print(f"embedding_status=missing")
-        print("No match created: missing source embedding")
+        print(f"[MATCHING_ERROR] missing_source_embedding")
+        print(f"[MATCHING_COMPLETE]")
         return []
 
-    print("Embedding loaded.")
-    print(f"embedding_id={report_id}")
+    print(f"[MATCHING_EMBEDDING_LOADED]")
     print(f"embedding_length={len(source_embedding)}")
-    print(f"embedding_status=success")
 
     candidate_reports = await filter_candidate_reports(
         db,
@@ -363,7 +364,8 @@ async def run_matching_for_report(
         report_type,
     )
 
-    print(f"Number of opposite reports found: {len(candidate_reports)}")
+    print(f"[MATCHING_CANDIDATES_FOUND]")
+    print(f"count={len(candidate_reports)}")
 
     scored_matches = await score_candidate_matches(
         db,
@@ -372,6 +374,10 @@ async def run_matching_for_report(
         source_report_id=str(report_obj_id),
     )
     ranked_matches = rank_matches(scored_matches, max_matches=max_matches)
+
+    print(f"[MATCHING_SCORED]")
+    print(f"scored_count={len(scored_matches)}")
+    print(f"ranked_count={len(ranked_matches)}")
 
     created_matches: list[dict[str, Any]] = []
     now = get_timestamp()
@@ -388,10 +394,10 @@ async def run_matching_for_report(
         found_reporter = source_report.get("reporter_email") if report_type == "found" else candidate.get("reporter_email")
         
         if await _match_exists(db, str(missing_id), str(found_id)):
-            print("No match created: duplicate match exists")
+            print(f"[MATCHING_DUPLICATE] missing_id={missing_id} found_id={found_id}")
             continue
 
-        print("Creating Match...")
+        print(f"[MATCHING_CREATE] rank={rank} score={score}")
         match_doc = {
             "missing_id": missing_id,
             "found_id": found_id,
@@ -426,10 +432,11 @@ async def run_matching_for_report(
             raw_score=float(raw_score),
             confidence=_get_confidence_label(score),
         )
-        print("Match Created Successfully")
-        print("Inserted ID:")
-        print(str(result.inserted_id))
+        print(f"[MATCHING_CREATED] match_id={result.inserted_id}")
 
+    print(f"[MATCHING_COMPLETE]")
+    print(f"matches_created={len(created_matches)}")
+    
     if not created_matches:
         print("No match found")
 

@@ -69,96 +69,131 @@ async def report_lost(
     photo: UploadFile = File(...),
     current_user: dict = Depends(get_current_user),
 ):
-    db = get_db()
-    reporter_email = current_user["email"]
-    lat = _optional_form_float(latitude)
-    lng = _optional_form_float(longitude)
-    missing_at = _parse_report_date(date_missing, "date_missing")
-
-    raw, content_type = await read_and_validate_upload(photo)
-    compressed = compress_image(raw)
-    filename = generate_filename(content_type)
-    folder = "lost"
-    storage = upload_image(compressed, folder, filename)
-
-    # Build structured location
-    location_structured = Location(
-        country=country,
-        state=state,
-        district=district if district else None,
-        city=city,
-        address=address if address else None,
-        pincode=pincode if pincode else None,
-        latitude=lat,
-        longitude=lng,
-    )
+    print(f"[REPORT_LOST_START]")
     
-    # Build geo_point if coordinates provided
-    geo_point = None
-    if lat is not None and lng is not None:
-        geo_point = {
-            "type": "Point",
-            "coordinates": [lng, lat]
+    try:
+        db = get_db()
+        reporter_email = current_user["email"]
+        lat = _optional_form_float(latitude)
+        lng = _optional_form_float(longitude)
+        missing_at = _parse_report_date(date_missing, "date_missing")
+
+        print(f"[REPORT_LOST_AUTH_OK]")
+        print(f"reporter_email={reporter_email}")
+
+        # Validate and read upload
+        raw, content_type = await read_and_validate_upload(photo)
+        print(f"[REPORT_LOST_IMAGE_VALIDATED]")
+        print(f"content_type={content_type}")
+        print(f"image_size={len(raw)}")
+        
+        compressed = compress_image(raw)
+        filename = generate_filename(content_type)
+        folder = "lost"
+        
+        print(f"[REPORT_LOST_CLOUDINARY_START]")
+        storage = upload_image(compressed, folder, filename)
+        print(f"[REPORT_LOST_CLOUDINARY_SUCCESS]")
+        print(f"image_url={storage['image_url']}")
+
+        # Build structured location
+        location_structured = Location(
+            country=country,
+            state=state,
+            district=district if district else None,
+            city=city,
+            address=address if address else None,
+            pincode=pincode if pincode else None,
+            latitude=lat,
+            longitude=lng,
+        )
+        
+        # Build geo_point if coordinates provided
+        geo_point = None
+        if lat is not None and lng is not None:
+            geo_point = {
+                "type": "Point",
+                "coordinates": [lng, lat]
+            }
+
+        child_doc = {
+            "name": child_name,
+            "age": str(age),
+            "gender": gender,
+            "location": location_structured.to_legacy_string(),
+            "location_structured": {
+                **location_structured.model_dump(),
+                "geo_point": geo_point
+            },
+            "location_version": 2,
+            "date_missing": missing_at,
+            "description": description,
+            "image_url": storage["image_url"],
+            "public_id": storage["public_id"],
+            "storage": "cloudinary",
+            "status": "Pending",
+            "reporter_email": reporter_email,
+            "created_at": get_timestamp(),
         }
+        
+        print(f"[REPORT_LOST_DB_CREATE_START]")
+        result = await db.children.insert_one(child_doc)
+        child_id = str(result.inserted_id)
+        print(f"[REPORT_LOST_DB_CREATE_SUCCESS]")
+        print(f"child_id={child_id}")
 
-    child_doc = {
-        "name": child_name,
-        "age": str(age),  # Store as string for backward compatibility
-        "gender": gender,
-        "location": location_structured.to_legacy_string(),  # Legacy field
-        "location_structured": {
-            **location_structured.model_dump(),
-            "geo_point": geo_point
-        },
-        "location_version": 2,  # New schema version
-        "date_missing": missing_at,
-        "description": description,
-        "image_url": storage["image_url"],
-        "public_id": storage["public_id"],
-        "storage": "cloudinary",
-        "status": "Pending",
-        "reporter_email": reporter_email,
-        "created_at": get_timestamp(),
-    }
-    result = await db.children.insert_one(child_doc)
-    child_id = str(result.inserted_id)
+        await db.notifications.insert_one({
+            "type": "new_report",
+            "message": f"New missing child reported: {child_name}",
+            "child_name": child_name,
+            "child_age": str(age),
+            "child_location": location_structured.to_legacy_string(),
+            "reporter_email": reporter_email,
+            "created_at": get_timestamp(),
+        })
 
-    await db.notifications.insert_one({
-        "type": "new_report",
-        "message": f"New missing child reported: {child_name}",
-        "child_name": child_name,
-        "child_age": str(age),
-        "child_location": location_structured.to_legacy_string(),
-        "reporter_email": reporter_email,
-        "created_at": get_timestamp(),
-    })
-
-    embedding_result = await create_embedding_record_for_report(
-        report_id=child_id,
-        report_type="missing",
-        user_id=current_user.get("id") or reporter_email,
-        image_input=raw,  # Use original uncompressed image for AI processing
-        report_collection_name="children",
-    )
-
-    if embedding_result["status"] == "failed":
-        message = "Report submitted successfully. Face detection failed. Admin review required."
-    else:
-        message = "Missing child report submitted successfully."
-        print(f"Matching started for report: {child_id}")
-        await run_matching_for_report(
+        print(f"[REPORT_LOST_EMBEDDING_START]")
+        embedding_result = await create_embedding_record_for_report(
             report_id=child_id,
             report_type="missing",
+            user_id=current_user.get("id") or reporter_email,
+            image_input=raw,
             report_collection_name="children",
-            candidate_collection_name="children_found",
         )
+        print(f"[REPORT_LOST_EMBEDDING_RESULT]")
+        print(f"status={embedding_result['status']}")
+        print(f"embedding_dimensions={embedding_result.get('embedding_dimensions', 0)}")
 
-    return {
-        "success": True,
-        "message": message,
-        "id": child_id,
-        "embedding_status": embedding_result["status"],
-    }
+        if embedding_result["status"] == "failed":
+            message = "Report submitted successfully. Face detection failed. Admin review required."
+        else:
+            message = "Missing child report submitted successfully."
+            print(f"[REPORT_LOST_MATCHING_START]")
+            print(f"report_id={child_id}")
+            await run_matching_for_report(
+                report_id=child_id,
+                report_type="missing",
+                report_collection_name="children",
+                candidate_collection_name="children_found",
+            )
+            print(f"[REPORT_LOST_MATCHING_RESULT]")
+            print(f"matching_completed=true")
+
+        print(f"[REPORT_LOST_COMPLETE]")
+        return {
+            "success": True,
+            "message": message,
+            "id": child_id,
+            "embedding_status": embedding_result["status"],
+        }
+        
+    except Exception as e:
+        print(f"[REPORT_LOST_ERROR]")
+        print(f"error_type={type(e).__name__}")
+        print(f"error_message={str(e)}")
+        import traceback
+        print(f"traceback={traceback.format_exc()}")
+        raise
 
 
 @router.post("/report-found")
@@ -180,85 +215,119 @@ async def report_found(
     photo: UploadFile = File(...),
     current_user: dict = Depends(get_current_user),
 ):
-    db = get_db()
-    reporter_email = current_user["email"]
-    lat = _optional_form_float(latitude)
-    lng = _optional_form_float(longitude)
-    found_at = _parse_report_date(date_found, "date_found")
-    resolved_name = child_name.strip() if child_name and child_name.strip() else "Unknown"
-
-    raw, content_type = await read_and_validate_upload(photo)
-    compressed = compress_image(raw)
-    filename = generate_filename(content_type)
-    folder = "found"
-    storage = upload_image(compressed, folder, filename)
-
-    location_structured = Location(
-        country=country,
-        state=state,
-        district=district if district else None,
-        city=city,
-        address=address if address else None,
-        pincode=pincode if pincode else None,
-        latitude=lat,
-        longitude=lng,
-    )
+    print(f"[REPORT_FOUND_START]")
     
-    geo_point = None
-    if lat is not None and lng is not None:
-        geo_point = {
-            "type": "Point",
-            "coordinates": [lng, lat]
+    try:
+        db = get_db()
+        reporter_email = current_user["email"]
+        lat = _optional_form_float(latitude)
+        lng = _optional_form_float(longitude)
+        found_at = _parse_report_date(date_found, "date_found")
+        resolved_name = child_name.strip() if child_name and child_name.strip() else "Unknown"
+
+        print(f"[REPORT_FOUND_AUTH_OK]")
+        print(f"reporter_email={reporter_email}")
+
+        raw, content_type = await read_and_validate_upload(photo)
+        print(f"[REPORT_FOUND_IMAGE_VALIDATED]")
+        print(f"content_type={content_type}")
+        print(f"image_size={len(raw)}")
+        
+        compressed = compress_image(raw)
+        filename = generate_filename(content_type)
+        folder = "found"
+        
+        print(f"[REPORT_FOUND_CLOUDINARY_START]")
+        storage = upload_image(compressed, folder, filename)
+        print(f"[REPORT_FOUND_CLOUDINARY_SUCCESS]")
+        print(f"image_url={storage['image_url']}")
+
+        location_structured = Location(
+            country=country,
+            state=state,
+            district=district if district else None,
+            city=city,
+            address=address if address else None,
+            pincode=pincode if pincode else None,
+            latitude=lat,
+            longitude=lng,
+        )
+        
+        geo_point = None
+        if lat is not None and lng is not None:
+            geo_point = {
+                "type": "Point",
+                "coordinates": [lng, lat]
+            }
+
+        found_doc = {
+            "name": resolved_name,
+            "age": str(age),
+            "gender": gender,
+            "location": location_structured.to_legacy_string(),
+            "location_structured": {
+                **location_structured.model_dump(),
+                "geo_point": geo_point
+            },
+            "location_version": 2,
+            "date_found": found_at,
+            "description": description,
+            "image_url": storage["image_url"],
+            "public_id": storage["public_id"],
+            "storage": "cloudinary",
+            "status": "Pending",
+            "reporter_email": reporter_email,
+            "created_at": get_timestamp(),
         }
+        
+        print(f"[REPORT_FOUND_DB_CREATE_START]")
+        result = await db.children_found.insert_one(found_doc)
+        found_id = str(result.inserted_id)
+        print(f"[REPORT_FOUND_DB_CREATE_SUCCESS]")
+        print(f"found_id={found_id}")
 
-    found_doc = {
-        "name": resolved_name,
-        "age": str(age),
-        "gender": gender,
-        "location": location_structured.to_legacy_string(),
-        "location_structured": {
-            **location_structured.model_dump(),
-            "geo_point": geo_point
-        },
-        "location_version": 2,
-        "date_found": found_at,
-        "description": description,
-        "image_url": storage["image_url"],
-        "public_id": storage["public_id"],
-        "storage": "cloudinary",
-        "status": "Pending",
-        "reporter_email": reporter_email,
-        "created_at": get_timestamp(),
-    }
-    result = await db.children_found.insert_one(found_doc)
-    found_id = str(result.inserted_id)
-
-    embedding_result = await create_embedding_record_for_report(
-        report_id=found_id,
-        report_type="found",
-        user_id=current_user.get("id") or reporter_email,
-        image_input=raw,  # Use original uncompressed image for AI processing
-        report_collection_name="children_found",
-    )
-
-    if embedding_result["status"] == "failed":
-        message = "Report submitted successfully. Face detection failed. Admin review required."
-    else:
-        message = "Found child report submitted successfully."
-        print(f"Matching started for report: {found_id}")
-        await run_matching_for_report(
+        print(f"[REPORT_FOUND_EMBEDDING_START]")
+        embedding_result = await create_embedding_record_for_report(
             report_id=found_id,
             report_type="found",
+            user_id=current_user.get("id") or reporter_email,
+            image_input=raw,
             report_collection_name="children_found",
-            candidate_collection_name="children",
         )
+        print(f"[REPORT_FOUND_EMBEDDING_RESULT]")
+        print(f"status={embedding_result['status']}")
+        print(f"embedding_dimensions={embedding_result.get('embedding_dimensions', 0)}")
 
-    return {
-        "success": True,
-        "message": message,
-        "id": found_id,
-        "embedding_status": embedding_result["status"],
-    }
+        if embedding_result["status"] == "failed":
+            message = "Report submitted successfully. Face detection failed. Admin review required."
+        else:
+            message = "Found child report submitted successfully."
+            print(f"[REPORT_FOUND_MATCHING_START]")
+            print(f"report_id={found_id}")
+            await run_matching_for_report(
+                report_id=found_id,
+                report_type="found",
+                report_collection_name="children_found",
+                candidate_collection_name="children",
+            )
+            print(f"[REPORT_FOUND_MATCHING_RESULT]")
+            print(f"matching_completed=true")
+
+        print(f"[REPORT_FOUND_COMPLETE]")
+        return {
+            "success": True,
+            "message": message,
+            "id": found_id,
+            "embedding_status": embedding_result["status"],
+        }
+        
+    except Exception as e:
+        print(f"[REPORT_FOUND_ERROR]")
+        print(f"error_type={type(e).__name__}")
+        print(f"error_message={str(e)}")
+        import traceback
+        print(f"traceback={traceback.format_exc()}")
+        raise
 
 
 @router.get("/missing")
