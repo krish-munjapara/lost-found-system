@@ -137,7 +137,7 @@ async def report_lost(
         report_id=child_id,
         report_type="missing",
         user_id=current_user.get("id") or reporter_email,
-        image_input=compressed,
+        image_input=raw,  # Use original uncompressed image for AI processing
         report_collection_name="children",
     )
 
@@ -237,7 +237,7 @@ async def report_found(
         report_id=found_id,
         report_type="found",
         user_id=current_user.get("id") or reporter_email,
-        image_input=compressed,
+        image_input=raw,  # Use original uncompressed image for AI processing
         report_collection_name="children_found",
     )
 

@@ -202,7 +202,7 @@ async def filter_candidate_reports(
     """Pre-filter candidate reports before any expensive AI scoring."""
     candidate_query = {
         "status": {"$ne": "Resolved"},
-        "embedding_status": "success",
+        "embedding_status": {"$in": ["success", "success_with_warnings"]},
     }
 
     candidate_reports: list[dict[str, Any]] = []

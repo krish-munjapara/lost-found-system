@@ -103,6 +103,14 @@ const CameraModal = ({ onCapture, onClose }) => {
     const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
     setCaptured(dataUrl);
 
+    // PHASE 1: Camera Capture Diagnostics
+    console.log('[CAMERA_CAPTURE]');
+    console.log('video.videoWidth=', video.videoWidth);
+    console.log('video.videoHeight=', video.videoHeight);
+    console.log('canvas.width=', canvas.width);
+    console.log('canvas.height=', canvas.height);
+    console.log('dataUrlLength=', dataUrl.length);
+
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop());
     }
@@ -119,8 +127,19 @@ const CameraModal = ({ onCapture, onClose }) => {
 
     canvas.toBlob(
       (blob) => {
-        if (!blob) return;
+        if (!blob) {
+          console.log('[CAMERA_CAPTURE] Blob is null!');
+          return;
+        }
         const file = new File([blob], `camera_capture_${Date.now()}.jpg`, { type: 'image/jpeg' });
+        
+        // PHASE 1: Camera Capture Diagnostics - File/Blob info
+        console.log('[CAMERA_CAPTURE]');
+        console.log('fileType=', file.type);
+        console.log('fileSize=', file.size);
+        console.log('blobSize=', blob.size);
+        console.log('dataUrlLength=', captured ? captured.length : 0);
+        
         onCapture(file, captured);
       },
       'image/jpeg',

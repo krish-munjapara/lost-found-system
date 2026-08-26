@@ -84,7 +84,13 @@ class FakeCollection:
                     elif doc.get("status") != expected:
                         return False
                 elif key == "embedding_status":
-                    if doc.get("embedding_status") != expected:
+                    if isinstance(expected, dict):
+                        if "$in" in expected:
+                            if doc.get("embedding_status") not in expected["$in"]:
+                                return False
+                        else:
+                            return False
+                    elif doc.get("embedding_status") != expected:
                         return False
                 else:
                     if doc.get(key) != expected:

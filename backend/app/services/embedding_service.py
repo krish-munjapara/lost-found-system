@@ -78,44 +78,110 @@ def assess_image_quality(image_input: str | np.ndarray) -> dict[str, Any]:
                 "reasons": ["image-unreadable"],
             }
 
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        variance_of_laplacian = cv2.Laplacian(gray, cv2.CV_64F).var()
-        blurry = variance_of_laplacian < 100.0
+        # Log image dimensions
+        frame_height, frame_width = image.shape[:2]
+        print(f"[QUALITY] Image dimensions: {frame_width}x{frame_height}")
+        print(f"[QUALITY] Image shape: {image.shape}")
 
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+        # Detect faces with Haar Cascade
         face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
         faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(40, 40))
+        
+        print(f"[QUALITY] Raw faces detected: {len(faces)}")
+        for i, (x, y, w, h) in enumerate(faces):
+            print(f"[QUALITY]   Face {i+1}: x={x}, y={y}, w={w}, h={h}")
+
+        # Filter out tiny false-positive faces
+        # Use both absolute minimum (100x100) and relative size (10% of image area)
+        image_area = frame_height * frame_width
+        min_face_area = 100 * 100  # Absolute minimum: 100x100 pixels
+        min_relative_area = image_area * 0.10  # Relative minimum: 10% of image area
+        
+        valid_faces = []
+        for x, y, w, h in faces:
+            face_area = w * h
+            if face_area >= min_face_area and face_area >= min_relative_area:
+                valid_faces.append((x, y, w, h))
+                print(f"[QUALITY]   Valid face: x={x}, y={y}, w={w}, h={h}, area={face_area}")
+            else:
+                print(f"[QUALITY]   Filtered tiny face: x={x}, y={y}, w={w}, h={h}, area={face_area}")
+
+        print(f"[QUALITY] Valid faces after filtering: {len(valid_faces)}")
+
+        # PHASE 4: Camera Quality Diagnostics
+        print(f"[CAMERA_QUALITY]")
+        print(f"faces_detected={len(faces)}")
+        print(f"valid_faces={len(valid_faces)}")
+        print(f"face_boxes={[(x, y, w, h) for x, y, w, h in faces]}")
 
         reasons: list[str] = []
-        if blurry:
-            reasons.append("blurry-image")
-        if len(faces) == 0:
+        
+        # Check face count
+        if len(valid_faces) == 0:
             reasons.append("no-face")
-        elif len(faces) > 1:
+        elif len(valid_faces) > 1:
             reasons.append("multiple-faces")
         else:
-            x, y, w, h = faces[0]
-            frame_height, frame_width = image.shape[:2]
-            face_area = w * h
-            image_area = frame_height * frame_width
-            if w < 60 or h < 60:
-                reasons.append("tiny-face")
+            # Exactly one valid face - use it for quality assessment
+            x, y, w, h = valid_faces[0]
+            
+            print(f"[CAMERA_QUALITY]")
+            print(f"largest_face_width={w}")
+            print(f"largest_face_height={h}")
+            
+            # Check if face is partially hidden (near edges)
             if x <= 10 or y <= 10 or x + w >= frame_width - 10 or y + h >= frame_height - 10:
                 reasons.append("partially-hidden-face")
+            
+            # Crop to the face for blur assessment
+            face_crop = image[y:y+h, x:x+w]
+            if face_crop.size == 0:
+                reasons.append("face-crop-failed")
+            else:
+                print(f"[CAMERA_QUALITY]")
+                print(f"face_crop_width={w}")
+                print(f"face_crop_height={h}")
+                
+                # Calculate Laplacian variance on the face crop only
+                face_gray = cv2.cvtColor(face_crop, cv2.COLOR_BGR2GRAY)
+                variance_of_laplacian = cv2.Laplacian(face_gray, cv2.CV_64F).var()
+                blurry = variance_of_laplacian < 100.0
+                
+                print(f"[QUALITY] Face crop dimensions: {w}x{h}")
+                print(f"[QUALITY] Face Laplacian variance: {variance_of_laplacian}")
+                print(f"[QUALITY] Blur threshold: 100.0")
+                print(f"[QUALITY] Is blurry: {blurry}")
+                
+                print(f"[CAMERA_QUALITY]")
+                print(f"laplacian_variance={variance_of_laplacian}")
+                print(f"blur_threshold=100.0")
+                print(f"quality_score={1.0 - (0.25 * len(reasons)) if reasons else 1.0}")
+                print(f"quality_reasons={reasons}")
+                
+                if blurry:
+                    reasons.append("blurry-image")
+
+        print(f"[QUALITY] Quality reasons: {reasons}")
 
         if reasons:
             score = max(0.0, 1.0 - (0.25 * len(reasons)))
+            print(f"[QUALITY] Final score: {score}, status: low_quality")
             return {
                 "status": "low_quality",
                 "face_quality_score": round(score, 2),
                 "reasons": reasons,
             }
 
+        print(f"[QUALITY] Final score: 1.0, status: good")
         return {
             "status": "good",
             "face_quality_score": 1.0,
             "reasons": [],
         }
     except Exception as exc:
+        print(f"[QUALITY] Exception: {exc}")
         return {
             "status": "unknown",
             "face_quality_score": 0.5,
@@ -173,22 +239,68 @@ async def create_embedding_record_for_report(
     if report_collection_name is None:
         report_collection_name = "children" if report_type == "missing" else "children_found"
 
+    print(f"[EMBEDDING] Processing report {report_id} ({report_type})")
+    print(f"[EMBEDDING] Image input type: {type(image_input)}")
+    
     if isinstance(image_input, bytes):
+        print(f"[EMBEDDING] Image input size: {len(image_input)} bytes")
         import cv2
         nparr = np.frombuffer(image_input, np.uint8)
         image_input = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        if image_input is not None:
+            print(f"[EMBEDDING] Decoded image shape: {image_input.shape}")
+        else:
+            print(f"[EMBEDDING] Failed to decode image from bytes")
+    elif isinstance(image_input, np.ndarray):
+        print(f"[EMBEDDING] Image input shape: {image_input.shape}")
+    elif isinstance(image_input, str):
+        print(f"[EMBEDDING] Image input URL/path: {image_input[:100]}...")
 
     quality = assess_image_quality(image_input)
     now = get_timestamp()
+    reasons = quality.get("reasons", [])
 
-    if quality.get("status") != "good":
+    # PHASE: Quality decision diagnostics
+    print(f"[EMBEDDING_QUALITY_DECISION]")
+    print(f"quality_status={quality.get('status')}")
+    print(f"quality_reasons={reasons}")
+
+    # Define hard failures that prevent embedding generation
+    hard_failure_reasons = {"no-face", "multiple-faces", "image-unreadable", "face-crop-failed"}
+    
+    # Define soft warnings that allow embedding generation
+    soft_warning_reasons = {"blurry-image", "partially-hidden-face"}
+
+    # Check if any hard failure reasons are present
+    has_hard_failure = any(reason in hard_failure_reasons for reason in reasons)
+    
+    # Check if only soft warnings are present
+    has_only_soft_warnings = all(reason in soft_warning_reasons for reason in reasons) and len(reasons) > 0
+
+    print(f"[EMBEDDING_QUALITY_DECISION]")
+    print(f"hard_failure={has_hard_failure}")
+    print(f"soft_warning={has_only_soft_warnings}")
+
+    # PHASE: Log before early-return condition
+    print(f"[EMBEDDING_EARLY_RETURN_CHECK]")
+    print(f"condition_check=quality.get('status') != 'good' and has_hard_failure")
+    print(f"quality_status={quality.get('status')}")
+    print(f"has_hard_failure={has_hard_failure}")
+    print(f"will_early_return={quality.get('status') != 'good' and has_hard_failure}")
+
+    if quality.get("status") != "good" and has_hard_failure:
+        # Hard failure: do not generate embedding
+        print(f"[EMBEDDING_EARLY_RETURN]")
+        print(f"reason=hard_failure")
+        print(f"quality_status={quality.get('status')}")
+        print(f"reasons={reasons}")
         log_event(
             "Rejected Reason",
             report_id=report_id,
             report_type=report_type,
-            reason="quality",
+            reason="quality_hard_failure",
             quality_status=quality.get("status"),
-            quality_reasons=quality.get("reasons", []),
+            quality_reasons=reasons,
         )
         embedding_doc = {
             "report_id": report_obj_id,
@@ -199,8 +311,8 @@ async def create_embedding_record_for_report(
             "model_version": "1.0",
             "embedding_dimensions": 0,
             "face_quality_score": quality.get("face_quality_score", 0.0),
-            "status": "low_quality",
-            "quality_reasons": quality.get("reasons", []),
+            "status": "failed",
+            "quality_reasons": reasons,
             "created_at": now,
             "updated_at": now,
         }
@@ -211,22 +323,42 @@ async def create_embedding_record_for_report(
                 {
                     "$set": {
                         report_update_field: str(result.inserted_id),
-                        "embedding_status": "low_quality",
+                        "embedding_status": "failed",
                         "embedding_model": FACE_MODEL_NAME,
                         "face_quality_score": quality.get("face_quality_score", 0.0),
-                        "quality_reasons": quality.get("reasons", []),
+                        "quality_reasons": reasons,
                         "updated_at": now,
                     }
                 },
             )
         return {
             "embedding_id": str(result.inserted_id),
-            "status": "low_quality",
+            "status": "failed",
             "face_quality_score": quality.get("face_quality_score", 0.0),
             "embedding_dimensions": 0,
         }
 
+    # PHASE: ArcFace input diagnostics
+    print(f"[ARC_FACE_INPUT]")
+    print(f"reached_arcface=true")
+    if isinstance(image_input, np.ndarray):
+        print(f"image_shape={image_input.shape}")
+    else:
+        print(f"image_type={type(image_input)}")
+
     embedding = await generate_embedding_for_image(image_input)
+    
+    # PHASE: ArcFace result diagnostics
+    print(f"[ARC_FACE_RESULT]")
+    if embedding is None:
+        print(f"success=false")
+        print(f"embedding_dimensions=0")
+        print(f"error=embedding_generation_failed")
+    else:
+        print(f"success=true")
+        print(f"embedding_dimensions={len(embedding)}")
+        print(f"error=none")
+    
     if embedding is None:
         log_event(
             "Rejected Reason",
@@ -272,6 +404,15 @@ async def create_embedding_record_for_report(
             "embedding_dimensions": 0,
         }
 
+    # Determine final status based on quality warnings
+    # If we have soft warnings but embedding succeeded, mark as success with warnings
+    if has_only_soft_warnings:
+        embedding_status = "success_with_warnings"
+        doc_status = "success"
+    else:
+        embedding_status = "success"
+        doc_status = "success"
+
     embedding_doc = {
         "report_id": report_obj_id,
         "report_type": report_type,
@@ -281,8 +422,8 @@ async def create_embedding_record_for_report(
         "model_version": "1.0",
         "embedding_dimensions": len(embedding),
         "face_quality_score": quality.get("face_quality_score", 1.0),
-        "status": "success",
-        "quality_reasons": quality.get("reasons", []),
+        "status": doc_status,
+        "quality_reasons": reasons,
         "created_at": now,
         "updated_at": now,
     }
@@ -293,10 +434,10 @@ async def create_embedding_record_for_report(
             {
                 "$set": {
                     report_update_field: str(result.inserted_id),
-                    "embedding_status": "success",
+                    "embedding_status": embedding_status,
                     "embedding_model": FACE_MODEL_NAME,
                     "face_quality_score": quality.get("face_quality_score", 1.0),
-                    "quality_reasons": quality.get("reasons", []),
+                    "quality_reasons": reasons,
                     "updated_at": now,
                 }
             },
