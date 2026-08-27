@@ -106,3 +106,18 @@ LOW_MATCH_THRESHOLD = float(os.getenv("LOW_MATCH_THRESHOLD", "60.0"))
 DEFAULT_ADMIN_EMAIL = os.getenv("DEFAULT_ADMIN_EMAIL", "admin@guardianlink.com").strip()
 DEFAULT_ADMIN_PASSWORD = os.getenv("DEFAULT_ADMIN_PASSWORD", "1234")
 DEFAULT_ADMIN_NAME = os.getenv("DEFAULT_ADMIN_NAME", "System Admin").strip()
+
+# ──────────────────────────────────────────────
+# Google OAuth
+# ──────────────────────────────────────────────
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "").strip()
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "").strip()
+GOOGLE_OAUTH_ENABLED = bool(GOOGLE_CLIENT_ID)
+
+# ──────────────────────────────────────────────
+# SMS Provider (OTP)
+# ──────────────────────────────────────────────
+SMS_PROVIDER = os.getenv("SMS_PROVIDER", "mock").strip()  # Options: twilio, mock
+SMS_API_KEY = os.getenv("SMS_API_KEY", "").strip()
+SMS_SENDER_ID = os.getenv("SMS_SENDER_ID", "").strip()
+SMS_ENABLED = bool(SMS_PROVIDER and SMS_PROVIDER != "mock")

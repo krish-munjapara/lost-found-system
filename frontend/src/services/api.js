@@ -240,6 +240,45 @@ export const authApi = {
 
   resendVerification: async () =>
     authFetch(`${API_BASE}/auth/resend-verification`, { method: 'POST', headers: getAuthHeaders() }),
+
+  googleAuth: async (token) => {
+    console.log('[GOOGLE] API call to /auth/google');
+    const res = await fetch(`${API_BASE}/auth/google`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+    });
+    console.log('[GOOGLE] API response status:', res.status);
+    const data = await handleResponse(res);
+    console.log('[GOOGLE] API response data received');
+    // Only store auth if this is a normal JWT response (not pending signup)
+    if (!data.requires_profile_completion) {
+      storeAuth(data);
+    }
+    return data;
+  },
+
+  sendOTP: async (mobile, purpose = 'registration') => {
+    const res = await fetch(`${API_BASE}/auth/send-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mobile, purpose }),
+    });
+    return handleResponse(res);
+  },
+
+  verifyOTP: async (mobile, otp, pendingToken = null) => {
+    const body = { mobile, otp };
+    if (pendingToken) {
+      body.pending_token = pendingToken;
+    }
+    const res = await fetch(`${API_BASE}/auth/verify-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    return handleResponse(res);
+  },
 };
 
 export const userApi = {

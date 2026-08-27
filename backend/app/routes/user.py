@@ -26,8 +26,15 @@ async def get_profile(current_user: dict = Depends(get_current_user)):
 async def update_profile(updates: UserUpdate, current_user: dict = Depends(get_current_user)):
     db = get_db()
     update_data = {k: v for k, v in updates.model_dump().items() if v is not None}
+    
+    # Security: Prevent unauthorized changes to sensitive fields
+    protected_fields = {"email", "google_id", "auth_provider", "role", "email_verified"}
+    if any(field in update_data for field in protected_fields):
+        raise HTTPException(status_code=400, detail="Cannot modify protected fields")
+    
     if not update_data:
         raise HTTPException(status_code=400, detail="No fields to update")
+    
     await db.users.update_one({"email": current_user["email"]}, {"$set": update_data})
     updated = await db.users.find_one({"email": current_user["email"]})
     safe = serialize_doc(updated)

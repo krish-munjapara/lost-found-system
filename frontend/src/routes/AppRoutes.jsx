@@ -8,6 +8,7 @@ import { useAuth } from '../context/AuthContext';
 import Loader from '../components/common/Loader';
 
 import Admin from '../pages/Admin';
+import CompleteProfile from '../pages/CompleteProfile';
 import Dashboard from '../pages/Dashboard';
 import FoundChildren from '../pages/FoundChildren';
 import ForgotPassword from '../pages/ForgotPassword';
@@ -25,24 +26,37 @@ import Settings from '../pages/Settings';
 import VerifyEmail from '../pages/VerifyEmail';
 
 const ProtectedRoute = ({ children }) => {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, profileComplete, loading } = useAuth();
   if (loading) return <Loader fullScreen message="Loading..." />;
   if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (!profileComplete) return <Navigate to="/complete-profile" replace />;
+  return children;
+};
+
+const ProfileCompletionRoute = ({ children }) => {
+  const { isAuthenticated, loading, pendingProfileCompletion } = useAuth();
+  if (loading) return <Loader fullScreen message="Loading..." />;
+  // Allow access if authenticated and either has pending signup or is authenticated but incomplete
+  if (!isAuthenticated && !pendingProfileCompletion) return <Navigate to="/login" replace />;
   return children;
 };
 
 const AdminRoute = ({ children }) => {
-  const { isAuthenticated, isAdmin, loading } = useAuth();
+  const { isAuthenticated, isAdmin, profileComplete, loading } = useAuth();
   if (loading) return <Loader fullScreen message="Loading..." />;
   if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (!profileComplete) return <Navigate to="/complete-profile" replace />;
   if (!isAdmin) return <Navigate to="/dashboard" replace />;
   return children;
 };
 
 const PublicRoute = ({ children }) => {
-  const { isAuthenticated, isAdmin, loading } = useAuth();
+  const { isAuthenticated, isAdmin, profileComplete, loading } = useAuth();
   if (loading) return <Loader fullScreen message="Loading..." />;
-  if (isAuthenticated) return <Navigate to={isAdmin ? '/admin' : '/dashboard'} replace />;
+  if (isAuthenticated) {
+    if (!profileComplete) return <Navigate to="/complete-profile" replace />;
+    return <Navigate to={isAdmin ? '/admin' : '/dashboard'} replace />;
+  }
   return children;
 };
 
@@ -55,6 +69,7 @@ const routeTitles = {
   '/forgot-password': 'Forgot Password',
   '/reset-password': 'Reset Password',
   '/verify-email': 'Verify Email',
+  '/complete-profile': 'Complete Profile',
   '/dashboard': 'Dashboard',
   '/missing-children': 'Missing Children',
   '/found-children': 'Found Children',
@@ -83,6 +98,7 @@ const AppRoutes = () => {
       <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
       <Route path="/reset-password" element={<PublicRoute><ResetPassword /></PublicRoute>} />
       <Route path="/verify-email" element={<VerifyEmail />} />
+      <Route path="/complete-profile" element={<ProfileCompletionRoute><CompleteProfile /></ProfileCompletionRoute>} />
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
       <Route path="/missing-children" element={<ProtectedRoute><MissingChildren /></ProtectedRoute>} />
       <Route path="/found-children" element={<ProtectedRoute><FoundChildren /></ProtectedRoute>} />
