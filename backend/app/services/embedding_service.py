@@ -225,6 +225,80 @@ async def generate_embedding_for_image(image_input: str | np.ndarray) -> list[fl
     return normalized
 
 
+async def process_report_ai_pipeline(
+    report_id: str,
+    report_type: str,
+    user_id: str | None,
+    image_input: str | bytes | np.ndarray,
+    report_collection_name: str | None = None,
+) -> None:
+    """Background task: Generate embedding and run matching for a report.
+    
+    This function is designed to run in the background after the report
+    has been successfully created and the HTTP response has been returned.
+    It updates the report document with processing status and results.
+    """
+    from app.services.matching_service import run_matching_for_report
+    
+    db = get_db()
+    report_obj_id = _parse_object_id(report_id)
+    if report_collection_name is None:
+        report_collection_name = "children" if report_type == "missing" else "children_found"
+
+    print(f"[BACKGROUND_AI] Starting AI pipeline for report {report_id} ({report_type})")
+    
+    # Update status to processing
+    await db[report_collection_name].update_one(
+        {"_id": report_obj_id},
+        {"$set": {"ai_processing_status": "processing", "embedding_status": "processing"}}
+    )
+    
+    try:
+        # Generate embedding
+        print(f"[BACKGROUND_AI] Generating embedding for report {report_id}")
+        embedding_result = await create_embedding_record_for_report(
+            report_id=report_id,
+            report_type=report_type,
+            user_id=user_id,
+            image_input=image_input,
+            report_collection_name=report_collection_name,
+        )
+        
+        if embedding_result["status"] == "failed":
+            print(f"[BACKGROUND_AI] Embedding failed for report {report_id}")
+            await db[report_collection_name].update_one(
+                {"_id": report_obj_id},
+                {"$set": {"ai_processing_status": "failed", "embedding_status": "failed"}}
+            )
+            return
+        
+        # Run matching
+        print(f"[BACKGROUND_AI] Running matching for report {report_id}")
+        candidate_collection_name = "children_found" if report_type == "missing" else "children"
+        await run_matching_for_report(
+            report_id=report_id,
+            report_type=report_type,
+            report_collection_name=report_collection_name,
+            candidate_collection_name=candidate_collection_name,
+        )
+        
+        # Update status to completed
+        await db[report_collection_name].update_one(
+            {"_id": report_obj_id},
+            {"$set": {"ai_processing_status": "completed"}}
+        )
+        print(f"[BACKGROUND_AI] AI pipeline completed for report {report_id}")
+        
+    except Exception as e:
+        print(f"[BACKGROUND_AI] AI pipeline failed for report {report_id}: {e}")
+        import traceback
+        print(f"[BACKGROUND_AI] Traceback: {traceback.format_exc()}")
+        await db[report_collection_name].update_one(
+            {"_id": report_obj_id},
+            {"$set": {"ai_processing_status": "failed", "ai_processing_error": str(e)}}
+        )
+
+
 async def create_embedding_record_for_report(
     report_id: str,
     report_type: str,

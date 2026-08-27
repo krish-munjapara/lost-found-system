@@ -12,8 +12,7 @@ from app.utils.file_utils import (
     read_and_validate_upload, compress_image, generate_filename,
 )
 from app.services import upload_image
-from app.services.embedding_service import create_embedding_record_for_report
-from app.services.matching_service import run_matching_for_report
+from app.services.embedding_service import process_report_ai_pipeline
 from app.dependencies import get_current_user
 from app.models.location_model import Location
 
@@ -133,7 +132,10 @@ async def report_lost(
             "storage": "cloudinary",
             "status": "Pending",
             "reporter_email": reporter_email,
+            "user_id": current_user.get("id"),
             "created_at": get_timestamp(),
+            "ai_processing_status": "pending",
+            "embedding_status": "pending",
         }
         
         print(f"[REPORT_LOST_DB_CREATE_START]")
@@ -152,39 +154,23 @@ async def report_lost(
             "created_at": get_timestamp(),
         })
 
-        print(f"[REPORT_LOST_EMBEDDING_START]")
-        embedding_result = await create_embedding_record_for_report(
+        # Schedule AI processing in background
+        print(f"[REPORT_LOST_SCHEDULE_BACKGROUND_AI]")
+        background_tasks.add_task(
+            process_report_ai_pipeline,
             report_id=child_id,
             report_type="missing",
             user_id=current_user.get("id") or reporter_email,
             image_input=raw,
             report_collection_name="children",
         )
-        print(f"[REPORT_LOST_EMBEDDING_RESULT]")
-        print(f"status={embedding_result['status']}")
-        print(f"embedding_dimensions={embedding_result.get('embedding_dimensions', 0)}")
-
-        if embedding_result["status"] == "failed":
-            message = "Report submitted successfully. Face detection failed. Admin review required."
-        else:
-            message = "Missing child report submitted successfully."
-            print(f"[REPORT_LOST_MATCHING_START]")
-            print(f"report_id={child_id}")
-            await run_matching_for_report(
-                report_id=child_id,
-                report_type="missing",
-                report_collection_name="children",
-                candidate_collection_name="children_found",
-            )
-            print(f"[REPORT_LOST_MATCHING_RESULT]")
-            print(f"matching_completed=true")
 
         print(f"[REPORT_LOST_COMPLETE]")
         return {
             "success": True,
-            "message": message,
+            "message": "Missing child report submitted successfully. AI matching is in progress.",
             "id": child_id,
-            "embedding_status": embedding_result["status"],
+            "ai_processing_status": "pending",
         }
         
     except Exception as e:
@@ -277,7 +263,10 @@ async def report_found(
             "storage": "cloudinary",
             "status": "Pending",
             "reporter_email": reporter_email,
+            "user_id": current_user.get("id"),
             "created_at": get_timestamp(),
+            "ai_processing_status": "pending",
+            "embedding_status": "pending",
         }
         
         print(f"[REPORT_FOUND_DB_CREATE_START]")
@@ -286,39 +275,23 @@ async def report_found(
         print(f"[REPORT_FOUND_DB_CREATE_SUCCESS]")
         print(f"found_id={found_id}")
 
-        print(f"[REPORT_FOUND_EMBEDDING_START]")
-        embedding_result = await create_embedding_record_for_report(
+        # Schedule AI processing in background
+        print(f"[REPORT_FOUND_SCHEDULE_BACKGROUND_AI]")
+        background_tasks.add_task(
+            process_report_ai_pipeline,
             report_id=found_id,
             report_type="found",
             user_id=current_user.get("id") or reporter_email,
             image_input=raw,
             report_collection_name="children_found",
         )
-        print(f"[REPORT_FOUND_EMBEDDING_RESULT]")
-        print(f"status={embedding_result['status']}")
-        print(f"embedding_dimensions={embedding_result.get('embedding_dimensions', 0)}")
-
-        if embedding_result["status"] == "failed":
-            message = "Report submitted successfully. Face detection failed. Admin review required."
-        else:
-            message = "Found child report submitted successfully."
-            print(f"[REPORT_FOUND_MATCHING_START]")
-            print(f"report_id={found_id}")
-            await run_matching_for_report(
-                report_id=found_id,
-                report_type="found",
-                report_collection_name="children_found",
-                candidate_collection_name="children",
-            )
-            print(f"[REPORT_FOUND_MATCHING_RESULT]")
-            print(f"matching_completed=true")
 
         print(f"[REPORT_FOUND_COMPLETE]")
         return {
             "success": True,
-            "message": message,
+            "message": "Found child report submitted successfully. AI matching is in progress.",
             "id": found_id,
-            "embedding_status": embedding_result["status"],
+            "ai_processing_status": "pending",
         }
         
     except Exception as e:

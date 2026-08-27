@@ -101,12 +101,12 @@ class FakeCollection:
 class FakeDB:
     def __init__(self):
         self.children = FakeCollection([
-            {"_id": "missing-1", "reporter_email": "user-a@example.com", "status": "Pending", "gender": "Male", "age": "5", "location": "Delhi", "embedding_status": "success"},
-            {"_id": "missing-2", "reporter_email": "user-b@example.com", "status": "Resolved", "gender": "Male", "age": "5", "location": "Delhi", "embedding_status": "success"},
-            {"_id": "missing-3", "reporter_email": "user-c@example.com", "status": "Pending", "gender": "Female", "age": "6", "location": "Delhi", "embedding_status": "success"},
+            {"_id": "missing-1", "reporter_email": "user-a@example.com", "user_id": "user-a-id", "status": "Pending", "gender": "Male", "age": "5", "location": "Delhi", "embedding_status": "success"},
+            {"_id": "missing-2", "reporter_email": "user-b@example.com", "user_id": "user-b-id", "status": "Resolved", "gender": "Male", "age": "5", "location": "Delhi", "embedding_status": "success"},
+            {"_id": "missing-3", "reporter_email": "user-c@example.com", "user_id": "user-c-id", "status": "Pending", "gender": "Female", "age": "6", "location": "Delhi", "embedding_status": "success"},
         ])
         self.children_found = FakeCollection([
-            {"_id": "found-1", "reporter_email": "user-d@example.com", "status": "Pending", "gender": "Male", "age": "5", "location": "Delhi", "embedding_status": "success"},
+            {"_id": "found-1", "reporter_email": "user-d@example.com", "user_id": "user-d-id", "status": "Pending", "gender": "Male", "age": "5", "location": "Delhi", "embedding_status": "success"},
         ])
         self.face_embeddings = FakeCollection([
             {"report_id": "found-1", "embedding": [0.1, 0.2, 0.3]},
@@ -147,6 +147,7 @@ async def test_run_matching_handles_objectid_report_id(monkeypatch):
         {
             "_id": missing_id,
             "reporter_email": "user-e@example.com",
+            "user_id": "user-e-id",
             "status": "Pending",
             "gender": "Male",
             "age": "5",
@@ -158,6 +159,7 @@ async def test_run_matching_handles_objectid_report_id(monkeypatch):
         {
             "_id": found_id,
             "reporter_email": "user-d@example.com",
+            "user_id": "user-d-id",
             "status": "Pending",
             "gender": "Male",
             "age": "5",
@@ -189,6 +191,7 @@ async def test_run_matching_logs_rejected_reason(monkeypatch):
         {
             "_id": "missing-self",
             "reporter_email": "user-d@example.com",
+            "user_id": "user-d-id",
             "status": "Pending",
             "gender": "Male",
             "age": "5",
@@ -200,6 +203,7 @@ async def test_run_matching_logs_rejected_reason(monkeypatch):
         {
             "_id": "found-1",
             "reporter_email": "user-d@example.com",
+            "user_id": "user-d-id",
             "status": "Pending",
             "gender": "Male",
             "age": "5",
@@ -397,6 +401,7 @@ async def test_run_matching_blocks_self_matches(monkeypatch):
         {
             "_id": "missing-self",
             "reporter_email": "user-d@example.com",
+            "user_id": "user-d-id",
             "status": "Pending",
             "gender": "Male",
             "age": "5",
@@ -408,6 +413,7 @@ async def test_run_matching_blocks_self_matches(monkeypatch):
         {
             "_id": "found-1",
             "reporter_email": "user-d@example.com",
+            "user_id": "user-d-id",
             "status": "Pending",
             "gender": "Male",
             "age": "5",
@@ -438,6 +444,7 @@ async def test_run_matching_rejects_same_user(monkeypatch):
         {
             "_id": "missing-self",
             "reporter_email": "user-d@example.com",
+            "user_id": "user-d-id",
             "status": "Pending",
             "gender": "Male",
             "age": "5",
@@ -449,6 +456,7 @@ async def test_run_matching_rejects_same_user(monkeypatch):
         {
             "_id": "found-1",
             "reporter_email": "user-d@example.com",
+            "user_id": "user-d-id",
             "status": "Pending",
             "gender": "Male",
             "age": "5",
@@ -730,3 +738,394 @@ async def test_run_matching_keeps_top_five_and_prevents_duplicates(monkeypatch):
     assert [match["score"] for match in first_run] == sorted(
         [match["score"] for match in first_run], reverse=True
     )
+
+
+@pytest.mark.asyncio
+async def test_cross_user_matching_user_a_missing_user_b_found_creates_match(monkeypatch):
+    """Test: User A Missing + User B Found → match"""
+    fake_db = FakeDB()
+    fake_db.children.docs = [
+        {
+            "_id": "missing-a",
+            "reporter_email": "user-a@example.com",
+            "user_id": "user-a-id",
+            "status": "Pending",
+            "gender": "Male",
+            "age": "5",
+            "location": "Delhi",
+            "embedding_status": "success",
+        }
+    ]
+    fake_db.children_found.docs = [
+        {
+            "_id": "found-b",
+            "reporter_email": "user-b@example.com",
+            "user_id": "user-b-id",
+            "status": "Pending",
+            "gender": "Male",
+            "age": "5",
+            "location": "Delhi",
+            "embedding_status": "success",
+        }
+    ]
+    fake_db.face_embeddings.docs = [
+        {"report_id": "missing-a", "embedding": [0.1, 0.2, 0.3]},
+        {"report_id": "found-b", "embedding": [0.1, 0.2, 0.3]},
+    ]
+    monkeypatch.setattr(matching_service, "get_db", lambda: fake_db)
+
+    result = await matching_service.run_matching_for_report(
+        report_id="missing-a",
+        report_type="missing",
+        report_collection_name="children",
+        candidate_collection_name="children_found",
+    )
+
+    assert len(result) == 1
+
+
+@pytest.mark.asyncio
+async def test_cross_user_matching_user_a_found_user_b_missing_creates_match(monkeypatch):
+    """Test: User A Found + User B Missing → match"""
+    fake_db = FakeDB()
+    fake_db.children.docs = [
+        {
+            "_id": "missing-b",
+            "reporter_email": "user-b@example.com",
+            "user_id": "user-b-id",
+            "status": "Pending",
+            "gender": "Male",
+            "age": "5",
+            "location": "Delhi",
+            "embedding_status": "success",
+        }
+    ]
+    fake_db.children_found.docs = [
+        {
+            "_id": "found-a",
+            "reporter_email": "user-a@example.com",
+            "user_id": "user-a-id",
+            "status": "Pending",
+            "gender": "Male",
+            "age": "5",
+            "location": "Delhi",
+            "embedding_status": "success",
+        }
+    ]
+    fake_db.face_embeddings.docs = [
+        {"report_id": "missing-b", "embedding": [0.1, 0.2, 0.3]},
+        {"report_id": "found-a", "embedding": [0.1, 0.2, 0.3]},
+    ]
+    monkeypatch.setattr(matching_service, "get_db", lambda: fake_db)
+
+    result = await matching_service.run_matching_for_report(
+        report_id="found-a",
+        report_type="found",
+        report_collection_name="children_found",
+        candidate_collection_name="children",
+    )
+
+    assert len(result) == 1
+
+
+@pytest.mark.asyncio
+async def test_same_user_missing_found_no_match(monkeypatch):
+    """Test: User A Missing + User A Found → no match"""
+    fake_db = FakeDB()
+    fake_db.children.docs = [
+        {
+            "_id": "missing-a",
+            "reporter_email": "user-a@example.com",
+            "user_id": "user-a-id",
+            "status": "Pending",
+            "gender": "Male",
+            "age": "5",
+            "location": "Delhi",
+            "embedding_status": "success",
+        }
+    ]
+    fake_db.children_found.docs = [
+        {
+            "_id": "found-a",
+            "reporter_email": "user-a@example.com",
+            "user_id": "user-a-id",
+            "status": "Pending",
+            "gender": "Male",
+            "age": "5",
+            "location": "Delhi",
+            "embedding_status": "success",
+        }
+    ]
+    fake_db.face_embeddings.docs = [
+        {"report_id": "missing-a", "embedding": [0.1, 0.2, 0.3]},
+        {"report_id": "found-a", "embedding": [0.1, 0.2, 0.3]},
+    ]
+    monkeypatch.setattr(matching_service, "get_db", lambda: fake_db)
+
+    result = await matching_service.run_matching_for_report(
+        report_id="missing-a",
+        report_type="missing",
+        report_collection_name="children",
+        candidate_collection_name="children_found",
+    )
+
+    assert result == []
+
+
+@pytest.mark.asyncio
+async def test_missing_missing_no_match(monkeypatch):
+    """Test: User A Missing + User B Missing → no match (collection isolation)"""
+    fake_db = FakeDB()
+    fake_db.children.docs = [
+        {
+            "_id": "missing-a",
+            "reporter_email": "user-a@example.com",
+            "user_id": "user-a-id",
+            "status": "Pending",
+            "gender": "Male",
+            "age": "5",
+            "location": "Delhi",
+            "embedding_status": "success",
+        },
+        {
+            "_id": "missing-b",
+            "reporter_email": "user-b@example.com",
+            "user_id": "user-b-id",
+            "status": "Pending",
+            "gender": "Male",
+            "age": "5",
+            "location": "Delhi",
+            "embedding_status": "success",
+        }
+    ]
+    fake_db.children_found.docs = []
+    fake_db.face_embeddings.docs = [
+        {"report_id": "missing-a", "embedding": [0.1, 0.2, 0.3]},
+        {"report_id": "missing-b", "embedding": [0.1, 0.2, 0.3]},
+    ]
+    monkeypatch.setattr(matching_service, "get_db", lambda: fake_db)
+
+    result = await matching_service.run_matching_for_report(
+        report_id="missing-a",
+        report_type="missing",
+        report_collection_name="children",
+        candidate_collection_name="children_found",
+    )
+
+    assert result == []
+
+
+@pytest.mark.asyncio
+async def test_found_found_no_match(monkeypatch):
+    """Test: User A Found + User B Found → no match (collection isolation)"""
+    fake_db = FakeDB()
+    fake_db.children.docs = []
+    fake_db.children_found.docs = [
+        {
+            "_id": "found-a",
+            "reporter_email": "user-a@example.com",
+            "user_id": "user-a-id",
+            "status": "Pending",
+            "gender": "Male",
+            "age": "5",
+            "location": "Delhi",
+            "embedding_status": "success",
+        },
+        {
+            "_id": "found-b",
+            "reporter_email": "user-b@example.com",
+            "user_id": "user-b-id",
+            "status": "Pending",
+            "gender": "Male",
+            "age": "5",
+            "location": "Delhi",
+            "embedding_status": "success",
+        }
+    ]
+    fake_db.face_embeddings.docs = [
+        {"report_id": "found-a", "embedding": [0.1, 0.2, 0.3]},
+        {"report_id": "found-b", "embedding": [0.1, 0.2, 0.3]},
+    ]
+    monkeypatch.setattr(matching_service, "get_db", lambda: fake_db)
+
+    result = await matching_service.run_matching_for_report(
+        report_id="found-a",
+        report_type="found",
+        report_collection_name="children_found",
+        candidate_collection_name="children",
+    )
+
+    assert result == []
+
+
+@pytest.mark.asyncio
+async def test_multiple_cross_user_candidates(monkeypatch):
+    """Test: User A Missing + User B Found + User C Found → candidates from B/C can match"""
+    fake_db = FakeDB()
+    fake_db.children.docs = [
+        {
+            "_id": "missing-a",
+            "reporter_email": "user-a@example.com",
+            "user_id": "user-a-id",
+            "status": "Pending",
+            "gender": "Male",
+            "age": "5",
+            "location": "Delhi",
+            "embedding_status": "success",
+        }
+    ]
+    fake_db.children_found.docs = [
+        {
+            "_id": "found-b",
+            "reporter_email": "user-b@example.com",
+            "user_id": "user-b-id",
+            "status": "Pending",
+            "gender": "Male",
+            "age": "5",
+            "location": "Delhi",
+            "embedding_status": "success",
+        },
+        {
+            "_id": "found-c",
+            "reporter_email": "user-c@example.com",
+            "user_id": "user-c-id",
+            "status": "Pending",
+            "gender": "Male",
+            "age": "5",
+            "location": "Delhi",
+            "embedding_status": "success",
+        }
+    ]
+    fake_db.face_embeddings.docs = [
+        {"report_id": "missing-a", "embedding": [0.1, 0.2, 0.3]},
+        {"report_id": "found-b", "embedding": [0.1, 0.2, 0.3]},
+        {"report_id": "found-c", "embedding": [0.11, 0.21, 0.31]},
+    ]
+    monkeypatch.setattr(matching_service, "get_db", lambda: fake_db)
+
+    result = await matching_service.run_matching_for_report(
+        report_id="missing-a",
+        report_type="missing",
+        report_collection_name="children",
+        candidate_collection_name="children_found",
+    )
+
+    assert len(result) == 2
+
+
+@pytest.mark.asyncio
+async def test_missing_searches_only_children_found(monkeypatch):
+    """Test: Missing searches only children_found collection"""
+    fake_db = FakeDB()
+    fake_db.children.docs = [
+        {
+            "_id": "missing-a",
+            "reporter_email": "user-a@example.com",
+            "user_id": "user-a-id",
+            "status": "Pending",
+            "gender": "Male",
+            "age": "5",
+            "location": "Delhi",
+            "embedding_status": "success",
+        }
+    ]
+    fake_db.children_found.docs = [
+        {
+            "_id": "found-b",
+            "reporter_email": "user-b@example.com",
+            "user_id": "user-b-id",
+            "status": "Pending",
+            "gender": "Male",
+            "age": "5",
+            "location": "Delhi",
+            "embedding_status": "success",
+        }
+    ]
+    fake_db.face_embeddings.docs = [
+        {"report_id": "missing-a", "embedding": [0.1, 0.2, 0.3]},
+        {"report_id": "found-b", "embedding": [0.1, 0.2, 0.3]},
+    ]
+    monkeypatch.setattr(matching_service, "get_db", lambda: fake_db)
+
+    # Track which collection was queried
+    queried_collections = []
+    original_find = fake_db.children_found.find
+    
+    def track_find(collection_name):
+        def wrapper(query=None):
+            queried_collections.append(collection_name)
+            return original_find(query)
+        return wrapper
+    
+    fake_db.children.find = track_find("children")
+    fake_db.children_found.find = track_find("children_found")
+
+    result = await matching_service.run_matching_for_report(
+        report_id="missing-a",
+        report_type="missing",
+        report_collection_name="children",
+        candidate_collection_name="children_found",
+    )
+
+    # Verify only children_found was queried for candidates
+    assert "children_found" in queried_collections
+    assert len(result) == 1
+
+
+@pytest.mark.asyncio
+async def test_found_searches_only_children(monkeypatch):
+    """Test: Found searches only children collection"""
+    fake_db = FakeDB()
+    fake_db.children.docs = [
+        {
+            "_id": "missing-b",
+            "reporter_email": "user-b@example.com",
+            "user_id": "user-b-id",
+            "status": "Pending",
+            "gender": "Male",
+            "age": "5",
+            "location": "Delhi",
+            "embedding_status": "success",
+        }
+    ]
+    fake_db.children_found.docs = [
+        {
+            "_id": "found-a",
+            "reporter_email": "user-a@example.com",
+            "user_id": "user-a-id",
+            "status": "Pending",
+            "gender": "Male",
+            "age": "5",
+            "location": "Delhi",
+            "embedding_status": "success",
+        }
+    ]
+    fake_db.face_embeddings.docs = [
+        {"report_id": "missing-b", "embedding": [0.1, 0.2, 0.3]},
+        {"report_id": "found-a", "embedding": [0.1, 0.2, 0.3]},
+    ]
+    monkeypatch.setattr(matching_service, "get_db", lambda: fake_db)
+
+    # Track which collection was queried
+    queried_collections = []
+    original_find = fake_db.children.find
+    
+    def track_find(collection_name):
+        def wrapper(query=None):
+            queried_collections.append(collection_name)
+            return original_find(query)
+        return wrapper
+    
+    fake_db.children.find = track_find("children")
+    fake_db.children_found.find = track_find("children_found")
+
+    result = await matching_service.run_matching_for_report(
+        report_id="found-a",
+        report_type="found",
+        report_collection_name="children_found",
+        candidate_collection_name="children",
+    )
+
+    # Verify only children was queried for candidates
+    assert "children" in queried_collections
+    assert len(result) == 1

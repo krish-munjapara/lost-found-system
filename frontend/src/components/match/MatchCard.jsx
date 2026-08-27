@@ -19,12 +19,14 @@ const MatchCard = ({ match, index = 0, onStatusChange }) => {
     missing_report_id,
     found_id,
     found_report_id,
+    missing_reporter,
+    found_reporter,
     similarity_score,
     created_at,
     timestamp,
   } = match || {};
 
-  const { isAdmin } = useAuth();
+  const { isAdmin, user } = useAuth();
   const [loading, setLoading] = React.useState(false);
   const [resolvedMissing, setResolvedMissing] = React.useState(null);
   const [resolvedFound, setResolvedFound] = React.useState(null);
@@ -36,6 +38,101 @@ const MatchCard = ({ match, index = 0, onStatusChange }) => {
   const score = Number(rawScore ?? similarity_score ?? 0);
   const matchId = match?.id || match?._id || match?.match_id;
   const timestampValue = timestamp || created_at || '';
+
+  // Determine which report belongs to the logged-in user
+  const userEmail = user?.email;
+  const isUserMissingReport = !isAdmin && userEmail && missing_reporter === userEmail;
+  const isUserFoundReport = !isAdmin && userEmail && found_reporter === userEmail;
+
+  // Helper function to format display ID from public_id
+  const formatDisplayId = (publicId, reportType) => {
+    if (!publicId) return 'N/A';
+    
+    // Extract the last part of the path (the hash)
+    const parts = publicId.split('/');
+    const hash = parts[parts.length - 1];
+    
+    // Take first 8 characters and convert to uppercase
+    const shortHash = hash.substring(0, 8).toUpperCase();
+    
+    // Determine prefix based on report type or public_id content
+    const isLost = reportType === 'lost' || publicId.includes('/lost/');
+    const prefix = isLost ? 'GL-LST' : 'GL-FND';
+    
+    return `${prefix}-${shortHash}`;
+  };
+
+  // Compact Report Card Component
+  const CompactReportCard = ({ person, label, folder, reportId, isUserReport }) => {
+    const safePerson = person || {};
+    const imageValue = safePerson?.image || safePerson?.image_url || safePerson?.photo_url || null;
+    const personName = safePerson?.name || 'Unknown';
+    const personAge = safePerson?.age || 'N/A';
+    const personLocation = safePerson?.location || 'Unknown';
+    const publicId = safePerson?.public_id || reportId || 'N/A';
+    
+    const dateField = folder === 'lost' ? safePerson?.date_missing : safePerson?.date_found;
+    const formattedDate = dateField ? new Date(dateField).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A';
+    const displayId = formatDisplayId(publicId, folder);
+    
+    const isMissing = folder === 'lost';
+    const labelColor = isMissing ? 'text-red-600' : 'text-green-600';
+
+    return (
+      <div className="flex gap-3 items-start">
+        {/* Image */}
+        <div className="w-20 h-20 shrink-0 rounded-lg overflow-hidden border border-slate-200 bg-slate-50">
+          {imageValue ? (
+            <img
+              src={getImageUrl(imageValue, folder, safePerson?.image_url)}
+              className="w-full h-full object-cover"
+              alt={personName}
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center">
+              <User className="w-8 h-8 text-slate-300" />
+            </div>
+          )}
+        </div>
+
+        {/* Details */}
+        <div className="flex-1 min-w-0">
+          {/* Label */}
+          <div className={`text-[10px] font-bold uppercase tracking-wider ${labelColor} mb-1`}>
+            {label}
+          </div>
+
+          {/* Report ID */}
+          <div className="text-[9px] font-mono text-slate-500 mb-2">
+            {displayId}
+          </div>
+
+          {/* Name */}
+          <div className="font-semibold text-sm text-slate-800 truncate mb-1">
+            {personName}
+          </div>
+
+          {/* Details */}
+          <div className="space-y-0.5">
+            <div className="text-[11px] text-slate-600">
+              {personAge} years old
+            </div>
+            <div className="text-[11px] text-slate-500 truncate">
+              {personLocation}
+            </div>
+            <div className="text-[10px] text-slate-400">
+              {formattedDate}
+            </div>
+          </div>
+
+          {/* Action */}
+          <button className="mt-2 text-[10px] font-medium text-blue-600 hover:text-blue-700 transition-colors">
+            {isUserReport ? 'View My Report →' : 'View Matched Report →'}
+          </button>
+        </div>
+      </div>
+    );
+  };
 
   const getConfidence = (value) => {
     if (value >= 75) return { label: 'High Confidence', color: 'text-green-600', bg: 'bg-green-100', ring: 'text-green-500', track: 'bg-green-50', icon: '✓' };
@@ -86,8 +183,6 @@ const MatchCard = ({ match, index = 0, onStatusChange }) => {
   }, [missing, found, effectiveMissingId, effectiveFoundId]);
 
   const confidence = getConfidence(score);
-  const circumference = 2 * Math.PI * 42;
-  const strokeDashoffset = circumference - (score / 100) * circumference;
 
   const handleConfirm = async () => {
     if (window.confirm('Are you sure you want to CONFIRM this match?')) {
@@ -117,35 +212,6 @@ const MatchCard = ({ match, index = 0, onStatusChange }) => {
     }
   };
 
-  const PersonCard = ({ person, label, folder, bgColor }) => {
-    const safePerson = person || {};
-    const imageValue = safePerson?.image || safePerson?.image_url || safePerson?.photo_url || null;
-    const personName = safePerson?.name || 'Unknown';
-    const personAge = safePerson?.age || 'N/A';
-    const personLocation = safePerson?.location || 'Unknown';
-
-    return (
-      <div className="flex flex-col items-center flex-1 max-w-[200px]">
-        <span className={`w-full text-center py-1 ${bgColor} text-[10px] font-bold uppercase rounded-md mb-3`}>
-          {label}
-        </span>
-        <div className="w-24 h-24 rounded-full border-4 border-slate-50 overflow-hidden shadow-sm mb-3 bg-slate-100 flex items-center justify-center">
-          {imageValue ? (
-            <img
-              src={getImageUrl(imageValue, folder, safePerson?.image_url)}
-              className="w-full h-full object-cover"
-              alt={personName}
-            />
-          ) : (
-            <User className="w-10 h-10 text-slate-300" />
-          )}
-        </div>
-        <h4 className="font-bold text-sm text-slate-800 text-center truncate w-full">{personName}</h4>
-        <p className="text-xs text-slate-500 text-center truncate w-full">{personAge} yrs • {personLocation}</p>
-      </div>
-    );
-  };
-
   // Normalize status string for safe check
   const normalizedStatus = status?.toLowerCase() || '';
 
@@ -160,109 +226,124 @@ const MatchCard = ({ match, index = 0, onStatusChange }) => {
 
   return (
     <div
-      className={`bg-white rounded-2xl border ${
-        normalizedStatus === 'confirmed' ? 'border-green-300 ring-2 ring-green-100' :
+      className={`bg-white rounded-lg border w-full max-w-full ${
+        normalizedStatus === 'confirmed' ? 'border-green-300' :
         normalizedStatus === 'rejected' ? 'border-red-300 opacity-50' :
         'border-slate-200'
-      } shadow-sm flex flex-col hover:shadow-md transition-all animate-slideUp`}
+      } shadow-sm hover:shadow-md transition-all animate-slideUp`}
       style={{ animationDelay: `${index * 0.1}s` }}
     >
       {/* User Context Banner (if applicable) */}
       {user_context && !isAdmin && (
-        <div className={`px-6 py-3 rounded-t-2xl border-b ${
-          user_context?.role === 'lost_reporter' ? 'bg-red-50 text-red-800 border-red-100' : 'bg-blue-50 text-blue-800 border-blue-100'
+        <div className={`px-4 py-2 border-b ${
+          user_context?.role === 'lost_reporter' ? 'bg-red-50/50 text-red-700 border-red-100' : 'bg-blue-50/50 text-blue-700 border-blue-100'
         }`}>
-          <h4 className="font-bold text-sm flex items-center gap-2">
-            <AlertCircle className="w-4 h-4" />
+          <h4 className="font-semibold text-xs flex items-center gap-2">
+            <AlertCircle className="w-3.5 h-3.5" />
             {user_context?.heading}
           </h4>
-          <p className="text-xs mt-1 opacity-90">{user_context?.detail}</p>
+          <p className="text-[10px] mt-0.5 opacity-90">{user_context?.detail}</p>
         </div>
       )}
 
-      {/* Match Status Banner */}
-      <div className="px-6 py-3 border-b flex items-center justify-between bg-slate-50 rounded-t-2xl">
-        <div className="flex items-center gap-2">
-          {normalizedStatus === 'confirmed' && <CheckCircle className="w-4 h-4 text-green-600" />}
-          {normalizedStatus === 'rejected' && <XCircle className="w-4 h-4 text-red-600" />}
-          {(normalizedStatus === 'pending' || normalizedStatus === 'pending_review') && <AlertCircle className="w-4 h-4 text-amber-500" />}
-          <span className={`text-xs font-bold uppercase tracking-wider ${
-            normalizedStatus === 'confirmed' ? 'text-green-700' :
-            normalizedStatus === 'rejected' ? 'text-red-700' :
-            'text-amber-600'
+      {/* Match Status Header */}
+      <div className="px-4 py-2.5 border-b flex items-center justify-between bg-slate-50/50">
+        <div className="flex items-center gap-3">
+          <span className="text-xs font-semibold text-slate-600">Potential Match</span>
+          <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${
+            normalizedStatus === 'confirmed' ? 'bg-green-100 text-green-700' :
+            normalizedStatus === 'rejected' ? 'bg-red-100 text-red-700' :
+            'bg-amber-100 text-amber-700'
           }`}>
-            {displayStatus} Match
+            {displayStatus}
           </span>
         </div>
-        <span className="text-xs text-slate-400 font-medium">
+        <span className="text-[11px] text-slate-400 font-medium">
           {timestampValue ? new Date(timestampValue).toLocaleDateString() : '—'}
         </span>
       </div>
 
-      <div className="p-4 sm:p-6 flex flex-col md:flex-row items-center gap-6 md:gap-8 justify-between">
-        {/* Missing Person */}
-        <PersonCard person={missingPerson} label="Missing" folder="lost" bgColor="bg-red-100 text-red-700" />
-
-        {/* Match Score */}
-        <div className="flex flex-col items-center flex-1 py-4 md:py-0">
-          <div className="relative w-32 h-32 mb-4">
-            <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
-              <circle cx="50" cy="50" r="42" className={`fill-none stroke-current ${confidence.track} stroke-[8]`} />
-              <circle
-                cx="50" cy="50" r="42"
-                className={`fill-none stroke-current ${confidence.ring} stroke-[8]`}
-                strokeLinecap="round"
-                strokeDasharray={circumference}
-                strokeDashoffset={strokeDashoffset}
-                style={{ transition: 'stroke-dashoffset 1.5s ease-out' }}
+      <div className="p-3 sm:p-4">
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] gap-0 items-stretch divide-y lg:divide-y-0 lg:divide-x divide-slate-100">
+          {/* User's Report (LEFT) */}
+          <div className={`py-3 lg:py-4 px-2 lg:px-4 ${isUserMissingReport ? 'border-l-2 border-l-blue-200 bg-blue-50/30' : 'border-l-2 border-l-blue-200 bg-blue-50/30'}`}>
+            {isUserMissingReport ? (
+              <CompactReportCard 
+                person={missingPerson} 
+                label="YOUR MISSING REPORT" 
+                folder="lost" 
+                reportId={effectiveMissingId}
+                isUserReport={true}
               />
-            </svg>
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className={`text-2xl font-bold ${confidence.color}`}>{score}%</span>
-              <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Match</span>
+            ) : (
+              <CompactReportCard 
+                person={foundPerson} 
+                label="YOUR FOUND REPORT" 
+                folder="found" 
+                reportId={effectiveFoundId}
+                isUserReport={true}
+              />
+            )}
+          </div>
+
+          {/* AI Match Center */}
+          <div className="py-3 lg:py-4 px-4 lg:px-6 flex flex-col items-center justify-center min-w-[140px]">
+            <div className="text-center space-y-2">
+              <div>
+                <span className={`text-2xl sm:text-3xl font-bold ${confidence.color}`}>{score.toFixed(1)}%</span>
+              </div>
+              <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">AI Match</div>
+              <div className={`text-[10px] font-medium ${confidence.color}`}>{confidence.label}</div>
+              <div className="w-32 h-1.5 bg-slate-100 rounded-full overflow-hidden mt-1">
+                <div
+                  className={`h-full rounded-full transition-all duration-1000 ${
+                    score >= 75 ? 'bg-green-500' : score >= 50 ? 'bg-amber-500' : 'bg-red-500'
+                  }`}
+                  style={{ width: `${score}%` }}
+                />
+              </div>
             </div>
           </div>
 
-          <span className={`px-3 py-1 text-xs font-bold rounded-full ${confidence.bg} ${confidence.color} mb-4`}>
-            {confidence.icon} {confidence.label}
-          </span>
-
-          <div className="w-full max-w-xs px-4">
-            <div className="flex justify-between text-xs font-medium text-slate-500 mb-1.5">
-              <span>Similarity</span>
-              <span className={confidence.color}>{score}%</span>
-            </div>
-            <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
-              <div
-                className={`h-full rounded-full transition-all duration-1000 ${
-                  score >= 75 ? 'bg-green-500' : score >= 50 ? 'bg-amber-500' : 'bg-red-500'
-                }`}
-                style={{ width: `${score}%` }}
+          {/* Other User's Report (RIGHT) */}
+          <div className="py-3 lg:py-4 px-2 lg:px-4">
+            {isUserMissingReport ? (
+              <CompactReportCard 
+                person={foundPerson} 
+                label="MATCHED FOUND REPORT" 
+                folder="found" 
+                reportId={effectiveFoundId}
+                isUserReport={false}
               />
-            </div>
+            ) : (
+              <CompactReportCard 
+                person={missingPerson} 
+                label="MATCHED MISSING REPORT" 
+                folder="lost" 
+                reportId={effectiveMissingId}
+                isUserReport={false}
+              />
+            )}
           </div>
         </div>
-
-        {/* Found Child */}
-        <PersonCard person={foundPerson} label="Found" folder="found" bgColor="bg-green-100 text-green-700" />
       </div>
 
       {/* Admin Review Actions */}
       {isAdmin && (normalizedStatus === 'pending' || normalizedStatus === 'pending_review') && (
-        <div className="p-4 bg-slate-50 border-t border-slate-200 rounded-b-2xl flex items-center justify-end gap-3">
+        <div className="px-4 py-3 bg-slate-50 border-t border-slate-200 rounded-b-lg flex items-center justify-end gap-3">
           <button
             onClick={handleReject}
             disabled={loading}
-            className="px-4 py-2 text-sm font-semibold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors border border-red-200 disabled:opacity-50"
+            className="px-3 py-1.5 text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 rounded-md transition-colors border border-red-200 disabled:opacity-50"
           >
-            Reject Match
+            Reject
           </button>
           <button
             onClick={handleConfirm}
             disabled={loading}
-            className="px-4 py-2 text-sm font-semibold text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors shadow-sm focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 flex items-center gap-2"
+            className="px-3 py-1.5 text-xs font-semibold text-white bg-green-600 hover:bg-green-700 rounded-md transition-colors disabled:opacity-50"
           >
-            <CheckCircle className="w-4 h-4" /> Verify Match
+            Confirm
           </button>
         </div>
       )}

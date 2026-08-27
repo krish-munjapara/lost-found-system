@@ -7,7 +7,8 @@ import React, { useState, useEffect } from 'react';
 import Layout from '../components/layout/Layout';
 import MatchCard from '../components/match/MatchCard';
 import MatchResult from '../components/match/MatchResult';
-import { Target, Filter } from 'lucide-react';
+import FilterPopover from '../components/match/FilterPopover';
+import { Target } from 'lucide-react';
 import { matchesApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
@@ -15,7 +16,8 @@ const Matches = () => {
   const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('All'); // All, Pending, Confirmed, Rejected
-  const { isAdmin } = useAuth();
+  const [reportTypeFilter, setReportTypeFilter] = useState('All'); // All, My Missing Reports, My Found Reports
+  const { isAdmin, user } = useAuth();
 
   useEffect(() => {
     loadMatches();
@@ -42,14 +44,30 @@ const Matches = () => {
   };
 
   const filteredMatches = matches.filter(m => {
-    if (filter === 'All') return true;
-    return m.status === filter;
+    // Status filter
+    if (filter !== 'All' && m.status !== filter) return false;
+    
+    // Report type filter (only for non-admin users)
+    if (!isAdmin && reportTypeFilter !== 'All') {
+      const userEmail = user?.email;
+      if (!userEmail) return false;
+      
+      if (reportTypeFilter === 'My Missing Reports') {
+        // Show matches where user's report is the missing report
+        return m.missing_reporter === userEmail;
+      } else if (reportTypeFilter === 'My Found Reports') {
+        // Show matches where user's report is the found report
+        return m.found_reporter === userEmail;
+      }
+    }
+    
+    return true;
   });
 
   return (
     <Layout>
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-        <div>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+        <div className="flex-1">
           <h1 className="text-2xl font-bold flex items-center gap-3 text-slate-800 mb-2">
             <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center shrink-0">
               <Target className="w-5 h-5 text-green-600" />
@@ -63,27 +81,22 @@ const Matches = () => {
           </p>
         </div>
 
-        {/* Filter */}
-        <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg p-1 shadow-sm shrink-0">
-          <Filter className="w-4 h-4 text-slate-400 ml-2" />
-          {['All', 'Pending', 'Confirmed', 'Rejected'].map(opt => (
-            <button
-              key={opt}
-              onClick={() => setFilter(opt)}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
-                filter === opt 
-                  ? 'bg-blue-50 text-blue-700' 
-                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-              }`}
-            >
-              {opt}
-            </button>
-          ))}
-        </div>
+        {/* Filter Popover */}
+        <FilterPopover
+          reportTypeFilter={reportTypeFilter}
+          statusFilter={filter}
+          onReportTypeChange={setReportTypeFilter}
+          onStatusChange={setFilter}
+          onClear={() => {
+            setReportTypeFilter('All');
+            setFilter('All');
+          }}
+          isAdmin={isAdmin}
+        />
       </div>
 
       {/* Match Summary */}
-      {!loading && matches.length > 0 && <MatchResult matches={matches} />}
+      {!loading && matches.length > 0 && <MatchResult matches={filteredMatches} />}
 
       {/* Match Cards */}
       {loading ? (

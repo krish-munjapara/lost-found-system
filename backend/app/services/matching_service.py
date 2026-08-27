@@ -200,18 +200,36 @@ async def filter_candidate_reports(
     report_type: str,
 ) -> list[dict[str, Any]]:
     """Pre-filter candidate reports before any expensive AI scoring."""
+    # Defensive validation: enforce collection isolation based on report_type
+    if report_type == "missing":
+        expected_collection = "children_found"
+    elif report_type == "found":
+        expected_collection = "children"
+    else:
+        raise ValueError(f"Invalid report_type: {report_type}")
+
+    if candidate_collection_name != expected_collection:
+        print(
+            f"[FILTER_ERROR] Collection mismatch: "
+            f"report_type={report_type}, "
+            f"expected={expected_collection}, "
+            f"actual={candidate_collection_name}"
+        )
+        candidate_collection_name = expected_collection
+
     candidate_query = {
         "status": {"$ne": "Resolved"},
         "embedding_status": {"$in": ["success", "success_with_warnings"]},
     }
 
     candidate_reports: list[dict[str, Any]] = []
+    source_user_id = source_report.get("user_id")
     async for candidate in db[candidate_collection_name].find(candidate_query):
         candidate_id = str(candidate.get("_id"))
-        candidate_user_id = candidate.get("reporter_email") or candidate.get("user_id")
+        candidate_user_id = candidate.get("user_id")
         candidate_embedding = await _get_embedding_for_report(db, candidate_id)
-        same_user = str(candidate_user_id) == str(source_report.get("reporter_email"))
         same_report = str(candidate_id) == str(report_id)
+        same_user = source_user_id and candidate_user_id and str(source_user_id) == str(candidate_user_id)
         has_embedding = candidate_embedding is not None
         is_active = str(candidate.get("status", "")).strip().lower() not in {"resolved", "archived", "closed"}
 
