@@ -24,28 +24,43 @@ import numpy as np
 def load_image_from_url_or_path(image_input: str | np.ndarray) -> np.ndarray | None:
     """Download image from HTTP(S) URL or load from path, decoding to numpy array using cv2.imdecode."""
     if isinstance(image_input, np.ndarray):
+        print(f"[AI_IMAGE_DOWNLOAD] source=numpy_array shape={image_input.shape}")
         return image_input
 
     if isinstance(image_input, str):
         import cv2
         if image_input.startswith("http://") or image_input.startswith("https://"):
+            print(f"[AI_IMAGE_DOWNLOAD_START] source=url url={image_input[:100]}...")
             try:
                 import urllib.request
                 with urllib.request.urlopen(image_input) as response:
                     image_bytes = response.read()
+                print(f"[AI_IMAGE_DOWNLOAD_SUCCESS] byte_size={len(image_bytes)}")
                 nparr = np.frombuffer(image_bytes, np.uint8)
-                return cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                decoded = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                if decoded is not None:
+                    print(f"[AI_IMAGE_DOWNLOAD_SUCCESS] shape={decoded.shape}")
+                else:
+                    print(f"[AI_IMAGE_DOWNLOAD_ERROR] error=decode_failed")
+                return decoded
             except Exception as exc:
-                print(f"Error downloading image from URL {image_input}: {exc}")
+                print(f"[AI_IMAGE_DOWNLOAD_ERROR] url={image_input[:100]}... error={str(exc)}")
                 return None
         else:
+            print(f"[AI_IMAGE_DOWNLOAD_START] source=local_path path={image_input}")
             try:
                 from pathlib import Path
                 image_bytes = Path(image_input).read_bytes()
+                print(f"[AI_IMAGE_DOWNLOAD_SUCCESS] byte_size={len(image_bytes)}")
                 nparr = np.frombuffer(image_bytes, np.uint8)
-                return cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                decoded = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                if decoded is not None:
+                    print(f"[AI_IMAGE_DOWNLOAD_SUCCESS] shape={decoded.shape}")
+                else:
+                    print(f"[AI_IMAGE_DOWNLOAD_ERROR] error=decode_failed")
+                return decoded
             except Exception as exc:
-                print(f"Error reading local file {image_input}: {exc}")
+                print(f"[AI_IMAGE_DOWNLOAD_ERROR] path={image_input} error={str(exc)}")
                 return None
     return None
 
@@ -216,12 +231,19 @@ def _parse_object_id(value: Any) -> ObjectId | None:
 
 async def generate_embedding_for_image(image_input: str | np.ndarray) -> list[float] | None:
     """Generate a face embedding for an image using the existing DeepFace implementation."""
+    print(f"[AI_EMBEDDING_GENERATE] starting")
     raw_embedding = get_face_encoding(image_input)
+    if raw_embedding is None:
+        print(f"[AI_EMBEDDING_ERROR] face_encoding_returned_none")
+        log_event("Embedding Generated", status="failed")
+        return None
     normalized = _normalize_embedding(raw_embedding)
     if normalized is None:
+        print(f"[AI_EMBEDDING_ERROR] normalization_failed")
         log_event("Embedding Generated", status="failed")
-    else:
-        log_event("Embedding Generated", status="success", dimensions=len(normalized))
+        return None
+    print(f"[AI_EMBEDDING_SUCCESS] embedding_dimensions={len(normalized)}")
+    log_event("Embedding Generated", status="success", dimensions=len(normalized))
     return normalized
 
 

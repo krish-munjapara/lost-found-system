@@ -156,6 +156,10 @@ async def report_lost(
 
         # Schedule AI processing in background
         print(f"[REPORT_LOST_SCHEDULE_BACKGROUND_AI]")
+        print(f"[REPORT_LOST_BACKGROUND_TASK_INFO] using_fastapi_background_tasks=true")
+        print(f"[REPORT_LOST_BACKGROUND_TASK_INFO] task_runs_in_same_process=true")
+        print(f"[REPORT_LOST_BACKGROUND_TASK_INFO] task_survives_request=true")
+        print(f"[REPORT_LOST_BACKGROUND_TASK_INFO] task_lost_if_process_restarts=true")
         background_tasks.add_task(
             process_report_ai_pipeline,
             report_id=child_id,
@@ -164,6 +168,7 @@ async def report_lost(
             image_input=raw,
             report_collection_name="children",
         )
+        print(f"[REPORT_LOST_BACKGROUND_TASK_SCHEDULED] child_id={child_id}")
 
         print(f"[REPORT_LOST_COMPLETE]")
         return {
@@ -277,6 +282,10 @@ async def report_found(
 
         # Schedule AI processing in background
         print(f"[REPORT_FOUND_SCHEDULE_BACKGROUND_AI]")
+        print(f"[REPORT_FOUND_BACKGROUND_TASK_INFO] using_fastapi_background_tasks=true")
+        print(f"[REPORT_FOUND_BACKGROUND_TASK_INFO] task_runs_in_same_process=true")
+        print(f"[REPORT_FOUND_BACKGROUND_TASK_INFO] task_survives_request=true")
+        print(f"[REPORT_FOUND_BACKGROUND_TASK_INFO] task_lost_if_process_restarts=true")
         background_tasks.add_task(
             process_report_ai_pipeline,
             report_id=found_id,
@@ -285,6 +294,7 @@ async def report_found(
             image_input=raw,
             report_collection_name="children_found",
         )
+        print(f"[REPORT_FOUND_BACKGROUND_TASK_SCHEDULED] found_id={found_id}")
 
         print(f"[REPORT_FOUND_COMPLETE]")
         return {
