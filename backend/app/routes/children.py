@@ -154,28 +154,22 @@ async def report_lost(
             "created_at": get_timestamp(),
         })
 
-        # Schedule AI processing in background
-        print(f"[REPORT_LOST_SCHEDULE_BACKGROUND_AI]")
-        print(f"[REPORT_LOST_BACKGROUND_TASK_INFO] using_fastapi_background_tasks=true")
-        print(f"[REPORT_LOST_BACKGROUND_TASK_INFO] task_runs_in_same_process=true")
-        print(f"[REPORT_LOST_BACKGROUND_TASK_INFO] task_survives_request=true")
-        print(f"[REPORT_LOST_BACKGROUND_TASK_INFO] task_lost_if_process_restarts=true")
-        print(f"[REPORT_LOST_BACKGROUND_TASK_INFO] image_source=cloudinary_url")
-        background_tasks.add_task(
-            process_report_ai_pipeline,
+        # Create persistent AI job
+        print(f"[REPORT_LOST_CREATE_AI_JOB]")
+        from app.services.job_service import create_ai_job
+        job_id = await create_ai_job(
             report_id=child_id,
             report_type="missing",
-            user_id=current_user.get("id") or reporter_email,
             report_collection_name="children",
         )
-        print(f"[REPORT_LOST_BACKGROUND_TASK_SCHEDULED] child_id={child_id}")
+        print(f"[REPORT_LOST_AI_JOB_CREATED] job_id={job_id}")
 
         print(f"[REPORT_LOST_COMPLETE]")
         return {
             "success": True,
             "message": "Missing child report submitted successfully. AI matching is in progress.",
             "id": child_id,
-            "ai_processing_status": "pending",
+            "ai_processing_status": "queued",
         }
         
     except Exception as e:
@@ -280,28 +274,22 @@ async def report_found(
         print(f"[REPORT_FOUND_DB_CREATE_SUCCESS]")
         print(f"found_id={found_id}")
 
-        # Schedule AI processing in background
-        print(f"[REPORT_FOUND_SCHEDULE_BACKGROUND_AI]")
-        print(f"[REPORT_FOUND_BACKGROUND_TASK_INFO] using_fastapi_background_tasks=true")
-        print(f"[REPORT_FOUND_BACKGROUND_TASK_INFO] task_runs_in_same_process=true")
-        print(f"[REPORT_FOUND_BACKGROUND_TASK_INFO] task_survives_request=true")
-        print(f"[REPORT_FOUND_BACKGROUND_TASK_INFO] task_lost_if_process_restarts=true")
-        print(f"[REPORT_FOUND_BACKGROUND_TASK_INFO] image_source=cloudinary_url")
-        background_tasks.add_task(
-            process_report_ai_pipeline,
+        # Create persistent AI job
+        print(f"[REPORT_FOUND_CREATE_AI_JOB]")
+        from app.services.job_service import create_ai_job
+        job_id = await create_ai_job(
             report_id=found_id,
             report_type="found",
-            user_id=current_user.get("id") or reporter_email,
             report_collection_name="children_found",
         )
-        print(f"[REPORT_FOUND_BACKGROUND_TASK_SCHEDULED] found_id={found_id}")
+        print(f"[REPORT_FOUND_AI_JOB_CREATED] job_id={job_id}")
 
         print(f"[REPORT_FOUND_COMPLETE]")
         return {
             "success": True,
             "message": "Found child report submitted successfully. AI matching is in progress.",
             "id": found_id,
-            "ai_processing_status": "pending",
+            "ai_processing_status": "queued",
         }
         
     except Exception as e:

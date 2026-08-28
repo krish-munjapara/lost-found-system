@@ -164,19 +164,26 @@ def assess_image_quality(image_input: str | np.ndarray) -> dict[str, Any]:
             print(f"[QUALITY]   Face {i+1}: x={x}, y={y}, w={w}, h={h}")
 
         # Filter out tiny false-positive faces
-        # Use both absolute minimum (100x100) and relative size (10% of image area)
+        # Use absolute minimum (80x80) and relative size (5% of image area)
         image_area = frame_height * frame_width
-        min_face_area = 100 * 100  # Absolute minimum: 100x100 pixels
-        min_relative_area = image_area * 0.10  # Relative minimum: 10% of image area
+        min_face_area = 80 * 80  # Absolute minimum: 80x80 pixels
+        min_relative_area = image_area * 0.05  # Relative minimum: 5% of image area
         
         valid_faces = []
         for x, y, w, h in faces:
             face_area = w * h
-            if face_area >= min_face_area and face_area >= min_relative_area:
+            passes_absolute = face_area >= min_face_area
+            passes_relative = face_area >= min_relative_area
+            
+            print(f"[QUALITY]   Face check: x={x}, y={y}, w={w}, h={h}, area={face_area}")
+            print(f"[QUALITY]     Absolute (>= {min_face_area}): {passes_absolute}")
+            print(f"[QUALITY]     Relative (>= {int(min_relative_area)}): {passes_relative}")
+            
+            if passes_absolute and passes_relative:
                 valid_faces.append((x, y, w, h))
                 print(f"[QUALITY]   Valid face: x={x}, y={y}, w={w}, h={h}, area={face_area}")
             else:
-                print(f"[QUALITY]   Filtered tiny face: x={x}, y={y}, w={w}, h={h}, area={face_area}")
+                print(f"[QUALITY]   Filtered face: x={x}, y={y}, w={w}, h={h}, area={face_area}")
 
         print(f"[QUALITY] Valid faces after filtering: {len(valid_faces)}")
 
