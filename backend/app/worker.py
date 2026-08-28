@@ -162,6 +162,9 @@ async def worker_loop(poll_interval_seconds: int = 5, standalone: bool = False) 
     
     while not shutdown_requested:
         try:
+            # Poll for jobs
+            print(f"[AI_WORKER_POLL] Polling for jobs...")
+            
             # Claim a job
             job = await claim_ai_job(timeout_seconds=300)
             
@@ -170,6 +173,7 @@ async def worker_loop(poll_interval_seconds: int = 5, standalone: bool = False) 
                 await process_ai_job(job)
             else:
                 # No jobs available, wait before next poll
+                print(f"[AI_WORKER_POLL] No jobs available, waiting {poll_interval_seconds}s...")
                 await asyncio.sleep(poll_interval_seconds)
                 
         except asyncio.CancelledError:
@@ -179,6 +183,16 @@ async def worker_loop(poll_interval_seconds: int = 5, standalone: bool = False) 
             print(f"[AI_WORKER_ERROR] error={str(e)}")
             import traceback
             print(f"[AI_WORKER_ERROR] traceback={traceback.format_exc()}")
+            # Check if it's a MongoDB connection error
+            if "connection" in str(e).lower() or "mongo" in str(e).lower():
+                print(f"[AI_WORKER_MONGO_ERROR] MongoDB connection issue detected, attempting reconnection...")
+                try:
+                    from app.database import close_db, connect_db
+                    await close_db()
+                    await connect_db()
+                    print(f"[AI_WORKER_MONGO_RECONNECT] MongoDB reconnected successfully")
+                except Exception as reconnect_error:
+                    print(f"[AI_WORKER_MONGO_RECONNECT_FAILED] reconnection_error={str(reconnect_error)}")
             await asyncio.sleep(poll_interval_seconds)
     
     print("[AI_WORKER_SHUTDOWN] Worker loop stopped")

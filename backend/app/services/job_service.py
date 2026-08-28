@@ -55,8 +55,10 @@ async def claim_ai_job(timeout_seconds: int = 300) -> dict[str, Any] | None:
     now = get_timestamp()
     timeout_timestamp = now - timedelta(seconds=timeout_seconds)
     
+    print(f"[AI_JOB_CLAIM_QUERY] Starting job claim query...")
+    
     # First, reclaim stuck jobs
-    await db.ai_jobs.update_many(
+    reclaim_result = await db.ai_jobs.update_many(
         {
             "status": "processing",
             "started_at": {"$lt": timeout_timestamp},
@@ -70,6 +72,12 @@ async def claim_ai_job(timeout_seconds: int = 300) -> dict[str, Any] | None:
             }
         }
     )
+    if reclaim_result.modified_count > 0:
+        print(f"[AI_JOB_RECLAIM] Reclaimed {reclaim_result.modified_count} stuck jobs")
+    
+    # Count queued jobs before claiming
+    queued_count = await db.ai_jobs.count_documents({"status": "queued"})
+    print(f"[AI_JOB_CLAIM_QUERY] Queued jobs count: {queued_count}")
     
     # Atomically claim a queued job
     job = await db.ai_jobs.find_one_and_update(
@@ -95,6 +103,8 @@ async def claim_ai_job(timeout_seconds: int = 300) -> dict[str, Any] | None:
     
     if job:
         print(f"[AI_JOB_CLAIMED] job_id={str(job['_id'])} report_id={job['report_id']} attempt={job['attempts']}")
+    else:
+        print(f"[AI_JOB_CLAIM_NONE] No queued jobs available to claim")
     
     return job
 
