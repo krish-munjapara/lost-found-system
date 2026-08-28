@@ -245,7 +245,7 @@ async def process_report_ai_pipeline(
     if report_collection_name is None:
         report_collection_name = "children" if report_type == "missing" else "children_found"
 
-    print(f"[BACKGROUND_AI] Starting AI pipeline for report {report_id} ({report_type})")
+    print(f"[AI_JOB_START] child_id={report_id} report_type={report_type}")
     
     # Update status to processing
     await db[report_collection_name].update_one(
@@ -254,26 +254,37 @@ async def process_report_ai_pipeline(
     )
     
     try:
+        # Load image
+        print(f"[AI_IMAGE_LOAD] child_id={report_id}")
+        image = load_image_from_url_or_path(image_input)
+        if image is None:
+            print(f"[AI_JOB_ERROR] child_id={report_id} error=Image load failed")
+            await db[report_collection_name].update_one(
+                {"_id": report_obj_id},
+                {"$set": {"ai_processing_status": "failed", "embedding_status": "failed", "ai_processing_error": "Image load failed"}}
+            )
+            return
+        
         # Generate embedding
-        print(f"[BACKGROUND_AI] Generating embedding for report {report_id}")
+        print(f"[AI_EMBEDDING_START] child_id={report_id}")
         embedding_result = await create_embedding_record_for_report(
             report_id=report_id,
             report_type=report_type,
             user_id=user_id,
-            image_input=image_input,
+            image_input=image,
             report_collection_name=report_collection_name,
         )
         
         if embedding_result["status"] == "failed":
-            print(f"[BACKGROUND_AI] Embedding failed for report {report_id}")
+            print(f"[AI_JOB_ERROR] child_id={report_id} error=Embedding generation failed")
             await db[report_collection_name].update_one(
                 {"_id": report_obj_id},
                 {"$set": {"ai_processing_status": "failed", "embedding_status": "failed"}}
             )
             return
         
+        print(f"[AI_MATCHING_START] child_id={report_id}")
         # Run matching
-        print(f"[BACKGROUND_AI] Running matching for report {report_id}")
         candidate_collection_name = "children_found" if report_type == "missing" else "children"
         await run_matching_for_report(
             report_id=report_id,
@@ -282,17 +293,18 @@ async def process_report_ai_pipeline(
             candidate_collection_name=candidate_collection_name,
         )
         
+        print(f"[AI_MATCHING_COMPLETE] child_id={report_id}")
         # Update status to completed
         await db[report_collection_name].update_one(
             {"_id": report_obj_id},
             {"$set": {"ai_processing_status": "completed"}}
         )
-        print(f"[BACKGROUND_AI] AI pipeline completed for report {report_id}")
+        print(f"[AI_JOB_COMPLETE] child_id={report_id}")
         
     except Exception as e:
-        print(f"[BACKGROUND_AI] AI pipeline failed for report {report_id}: {e}")
+        print(f"[AI_JOB_ERROR] child_id={report_id} error={str(e)}")
         import traceback
-        print(f"[BACKGROUND_AI] Traceback: {traceback.format_exc()}")
+        print(f"[AI_JOB_ERROR] child_id={report_id} traceback={traceback.format_exc()}")
         await db[report_collection_name].update_one(
             {"_id": report_obj_id},
             {"$set": {"ai_processing_status": "failed", "ai_processing_error": str(e)}}

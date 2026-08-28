@@ -19,26 +19,31 @@ def _get_deepface():
     """Lazy-load DeepFace module."""
     global _deepface
     if _deepface is None:
+        print(f"[AI_MODEL_LOAD] Starting DeepFace/TensorFlow initialization...")
         from deepface import DeepFace
         _deepface = DeepFace
+        print(f"[AI_MODEL_LOAD] DeepFace module imported successfully")
         # Pre-warm the model with a dummy image and prefer RetinaFace when available.
         try:
-            print(f"🧠 Pre-loading {FACE_MODEL_NAME} model...")
+            print(f"[AI_MODEL_LOAD] Pre-loading {FACE_MODEL_NAME} model...")
             dummy_img = np.zeros((224, 224, 3), dtype=np.uint8)
             for backend in _DETECTOR_BACKENDS:
                 try:
+                    print(f"[AI_MODEL_LOAD] Attempting pre-load with detector backend: {backend}")
                     _deepface.represent(
                         img_path=dummy_img,
                         model_name=FACE_MODEL_NAME,
                         detector_backend=backend,
                         enforce_detection=False,
                     )
-                    print(f"✅ {FACE_MODEL_NAME} model loaded successfully with {backend}")
+                    print(f"[AI_MODEL_LOAD] {FACE_MODEL_NAME} model loaded successfully with {backend}")
                     break
                 except Exception as exc:
-                    print(f"⚠️ Model pre-load with {backend} warning: {exc}")
+                    print(f"[AI_MODEL_LOAD] Model pre-load with {backend} warning: {exc}")
+            print(f"[AI_MODEL_LOAD] Model pre-warming completed")
         except Exception as e:
-            print(f"⚠️ Model pre-load warning: {e}")
+            print(f"[AI_MODEL_LOAD] Model pre-load warning: {e}")
+            print(f"[AI_MODEL_LOAD] This is not critical - model will load on first use")
     return _deepface
 
 
@@ -115,14 +120,20 @@ def get_face_encoding(image_input: str | np.ndarray) -> str | None:
         JSON string of the face embedding, or None if no face detected
     """
     try:
+        print(f"[AI_EMBEDDING] Starting face encoding process")
         DeepFace = _get_deepface()
+        print(f"[AI_EMBEDDING] DeepFace module loaded")
         embedding, _ = _try_represent(DeepFace, image_input)
         if embedding is None:
+            print(f"[AI_EMBEDDING] No face detected in image")
             return None
+        print(f"[AI_EMBEDDING] Face encoding generated successfully")
         return json.dumps(embedding)
 
     except Exception as e:
-        print(f"❌ Face detection failed: {e}")
+        print(f"[AI_EMBEDDING] Face detection failed: {e}")
+        import traceback
+        print(f"[AI_EMBEDDING] Traceback: {traceback.format_exc()}")
         return None
 
 
