@@ -134,23 +134,31 @@ async def process_ai_job(job: dict[str, Any]) -> None:
         await update_report_status(report_id, report_collection, "failed", str(e))
 
 
-async def worker_loop(poll_interval_seconds: int = 5) -> None:
-    """Main worker loop that polls for and processes jobs."""
+async def worker_loop(poll_interval_seconds: int = 5, standalone: bool = False) -> None:
+    """Main worker loop that polls for and processes jobs.
+    
+    Args:
+        poll_interval_seconds: Seconds to wait between job polls
+        standalone: If True, register signal handlers for graceful shutdown.
+                    If False (embedded in FastAPI), rely on asyncio.CancelledError.
+    """
     print("[AI_WORKER_START] Starting AI worker loop")
-    print(f"[AI_WORKER_CONFIG] poll_interval={poll_interval_seconds}s")
+    print(f"[AI_WORKER_CONFIG] poll_interval={poll_interval_seconds}s standalone={standalone}")
     
     shutdown_requested = False
     
-    def signal_handler():
-        nonlocal shutdown_requested
-        print("[AI_WORKER_SHUTDOWN] Shutdown requested")
-        shutdown_requested = True
-    
-    # Setup signal handlers for graceful shutdown
-    if sys.platform != "win32":
-        # Unix-like systems
-        signal.signal(signal.SIGTERM, signal_handler)
-        signal.signal(signal.SIGINT, signal_handler)
+    # Setup signal handlers only in standalone mode
+    if standalone:
+        def signal_handler():
+            nonlocal shutdown_requested
+            print("[AI_WORKER_SHUTDOWN] Shutdown requested")
+            shutdown_requested = True
+        
+        # Setup signal handlers for graceful shutdown
+        if sys.platform != "win32":
+            # Unix-like systems
+            signal.signal(signal.SIGTERM, signal_handler)
+            signal.signal(signal.SIGINT, signal_handler)
     
     while not shutdown_requested:
         try:
@@ -164,6 +172,9 @@ async def worker_loop(poll_interval_seconds: int = 5) -> None:
                 # No jobs available, wait before next poll
                 await asyncio.sleep(poll_interval_seconds)
                 
+        except asyncio.CancelledError:
+            print("[AI_WORKER_SHUTDOWN] Worker cancelled")
+            break
         except Exception as e:
             print(f"[AI_WORKER_ERROR] error={str(e)}")
             import traceback
@@ -181,8 +192,8 @@ async def main():
     await connect_db()
     print("[AI_WORKER_INIT] MongoDB connected")
     
-    # Start worker loop
-    await worker_loop(poll_interval_seconds=5)
+    # Start worker loop in standalone mode
+    await worker_loop(poll_interval_seconds=5, standalone=True)
     
     # Cleanup
     await close_db()

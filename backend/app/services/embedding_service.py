@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import Any
 
@@ -294,7 +295,10 @@ def _parse_object_id(value: Any) -> ObjectId | None:
 async def generate_embedding_for_image(image_input: str | np.ndarray) -> list[float] | None:
     """Generate a face embedding for an image using the existing DeepFace implementation."""
     print(f"[AI_EMBEDDING_GENERATE] starting")
-    raw_embedding = get_face_encoding(image_input)
+    
+    # Run blocking DeepFace operations in a thread to avoid blocking the event loop
+    raw_embedding = await asyncio.to_thread(get_face_encoding, image_input)
+    
     if raw_embedding is None:
         print(f"[AI_EMBEDDING_ERROR] face_encoding_returned_none")
         log_event("Embedding Generated", status="failed")

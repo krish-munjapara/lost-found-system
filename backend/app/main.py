@@ -2,6 +2,7 @@
 Guardian-Link — Application Entry Point
 """
 
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, status
@@ -35,9 +36,21 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         print(f"[MAIN] Default admin initialization failed: {exc}")
 
+    # Start AI worker as background task
+    from app.worker import worker_loop
+    worker_task = asyncio.create_task(worker_loop(poll_interval_seconds=5, standalone=False))
+    print("[MAIN] AI worker started as background task")
+
     print(f"[MAIN] {APP_NAME} v{APP_VERSION} is ready!")
 
     yield
+
+    # Cancel worker task on shutdown
+    worker_task.cancel()
+    try:
+        await worker_task
+    except asyncio.CancelledError:
+        print("[MAIN] AI worker cancelled")
 
     await close_db()
 
