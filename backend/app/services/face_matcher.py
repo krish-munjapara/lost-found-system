@@ -5,6 +5,7 @@ Handles face encoding extraction, similarity computation, and confidence scoring
 """
 
 import json
+import signal
 import numpy as np
 from app.config import DETECTOR_BACKEND, FACE_MODEL_NAME
 
@@ -13,37 +14,100 @@ from app.config import DETECTOR_BACKEND, FACE_MODEL_NAME
 # ──────────────────────────────────────────────
 _deepface = None
 _DETECTOR_BACKENDS = (DETECTOR_BACKEND, "opencv") if DETECTOR_BACKEND != "opencv" else ("opencv",)
+_model_initialized = False
+_model_init_error = None
+
+
+class TimeoutError(Exception):
+    """Custom timeout exception."""
+    pass
+
+
+def _timeout_handler(signum, frame):
+    """Signal handler for timeout."""
+    raise TimeoutError("Operation timed out")
 
 
 def _get_deepface():
-    """Lazy-load DeepFace module."""
-    global _deepface
-    if _deepface is None:
-        print(f"[AI_MODEL_LOAD] Starting DeepFace/TensorFlow initialization...")
+    """Lazy-load DeepFace module with timeout-safe pre-warming."""
+    global _deepface, _model_initialized, _model_init_error
+    
+    if _deepface is not None:
+        # Already loaded, return cached instance
+        print(f"[AI_MODEL_INIT] Model already initialized, reusing cached instance")
+        return _deepface
+    
+    if _model_init_error is not None:
+        # Previous initialization failed, don't retry
+        print(f"[AI_MODEL_INIT] Previous initialization failed: {_model_init_error}")
+        raise RuntimeError(f"Model initialization previously failed: {_model_init_error}")
+    
+    print(f"[AI_MODEL_INIT_START] Starting DeepFace/TensorFlow initialization...")
+    
+    try:
         from deepface import DeepFace
         _deepface = DeepFace
-        print(f"[AI_MODEL_LOAD] DeepFace module imported successfully")
-        # Pre-warm the model with a dummy image and prefer RetinaFace when available.
-        try:
-            print(f"[AI_MODEL_LOAD] Pre-loading {FACE_MODEL_NAME} model...")
-            dummy_img = np.zeros((224, 224, 3), dtype=np.uint8)
-            for backend in _DETECTOR_BACKENDS:
-                try:
-                    print(f"[AI_MODEL_LOAD] Attempting pre-load with detector backend: {backend}")
-                    _deepface.represent(
-                        img_path=dummy_img,
-                        model_name=FACE_MODEL_NAME,
-                        detector_backend=backend,
-                        enforce_detection=False,
-                    )
-                    print(f"[AI_MODEL_LOAD] {FACE_MODEL_NAME} model loaded successfully with {backend}")
-                    break
-                except Exception as exc:
-                    print(f"[AI_MODEL_LOAD] Model pre-load with {backend} warning: {exc}")
-            print(f"[AI_MODEL_LOAD] Model pre-warming completed")
-        except Exception as e:
-            print(f"[AI_MODEL_LOAD] Model pre-load warning: {e}")
-            print(f"[AI_MODEL_LOAD] This is not critical - model will load on first use")
+        print(f"[AI_MODEL_INIT_MODULE] DeepFace module imported successfully")
+        
+        # Pre-warm the model with a timeout to prevent indefinite hangs
+        print(f"[AI_MODEL_INIT_PREWARM] Pre-loading {FACE_MODEL_NAME} model...")
+        print(f"[AI_MODEL_INIT_PREWARM] Detector backends to try: {_DETECTOR_BACKENDS}")
+        
+        dummy_img = np.zeros((224, 224, 3), dtype=np.uint8)
+        prewarm_success = False
+        
+        for backend in _DETECTOR_BACKENDS:
+            try:
+                print(f"[AI_MODEL_INIT_PREWARM] Attempting pre-load with detector backend: {backend}")
+                
+                # Set timeout for pre-warming (60 seconds)
+                if hasattr(signal, 'SIGALRM'):  # Unix-like systems
+                    signal.signal(signal.SIGALRM, _timeout_handler)
+                    signal.alarm(60)
+                
+                _deepface.represent(
+                    img_path=dummy_img,
+                    model_name=FACE_MODEL_NAME,
+                    detector_backend=backend,
+                    enforce_detection=False,
+                )
+                
+                if hasattr(signal, 'SIGALRM'):  # Cancel alarm if successful
+                    signal.alarm(0)
+                
+                print(f"[AI_MODEL_INIT_PREWARM_SUCCESS] {FACE_MODEL_NAME} model loaded successfully with {backend}")
+                prewarm_success = True
+                _model_initialized = True
+                break
+                
+            except TimeoutError:
+                print(f"[AI_MODEL_INIT_PREWARM_TIMEOUT] Pre-load with {backend} timed out after 60s")
+                if hasattr(signal, 'SIGALRM'):
+                    signal.alarm(0)
+                # Continue to next backend or skip pre-warming
+                continue
+                
+            except Exception as exc:
+                print(f"[AI_MODEL_INIT_PREWARM_WARNING] Model pre-load with {backend} warning: {exc}")
+                if hasattr(signal, 'SIGALRM'):
+                    signal.alarm(0)
+                # Continue to next backend
+                continue
+        
+        if prewarm_success:
+            print(f"[AI_MODEL_INIT_SUCCESS] Model initialization completed successfully")
+        else:
+            print(f"[AI_MODEL_INIT_SKIP] Pre-warming skipped or failed, model will load on first use")
+            print(f"[AI_MODEL_INIT_SKIP] This is acceptable - model will initialize during first embedding generation")
+            _model_initialized = True  # Mark as initialized even if pre-warming skipped
+            
+    except Exception as e:
+        print(f"[AI_MODEL_INIT_FAILED] Model initialization failed: {e}")
+        import traceback
+        print(f"[AI_MODEL_INIT_FAILED] traceback={traceback.format_exc()}")
+        _model_init_error = str(e)
+        raise RuntimeError(f"Model initialization failed: {e}")
+    
     return _deepface
 
 
@@ -130,6 +194,15 @@ def get_face_encoding(image_input: str | np.ndarray) -> str | None:
         print(f"[AI_EMBEDDING] Face encoding generated successfully")
         return json.dumps(embedding)
 
+    except RuntimeError as e:
+        # Specific handling for model initialization failures
+        if "initialization" in str(e).lower():
+            print(f"[AI_EMBEDDING] Model initialization error: {e}")
+            print(f"[AI_EMBEDDING] This indicates a critical model loading failure")
+            return None
+        else:
+            print(f"[AI_EMBEDDING] Runtime error: {e}")
+            return None
     except Exception as e:
         print(f"[AI_EMBEDDING] Face detection failed: {e}")
         import traceback
