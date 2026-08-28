@@ -134,7 +134,7 @@ async def report_lost(
             "reporter_email": reporter_email,
             "user_id": current_user.get("id"),
             "created_at": get_timestamp(),
-            "ai_processing_status": "pending",
+            "ai_processing_status": "queued",
             "embedding_status": "pending",
         }
         
@@ -160,12 +160,12 @@ async def report_lost(
         print(f"[REPORT_LOST_BACKGROUND_TASK_INFO] task_runs_in_same_process=true")
         print(f"[REPORT_LOST_BACKGROUND_TASK_INFO] task_survives_request=true")
         print(f"[REPORT_LOST_BACKGROUND_TASK_INFO] task_lost_if_process_restarts=true")
+        print(f"[REPORT_LOST_BACKGROUND_TASK_INFO] image_source=cloudinary_url")
         background_tasks.add_task(
             process_report_ai_pipeline,
             report_id=child_id,
             report_type="missing",
             user_id=current_user.get("id") or reporter_email,
-            image_input=raw,
             report_collection_name="children",
         )
         print(f"[REPORT_LOST_BACKGROUND_TASK_SCHEDULED] child_id={child_id}")
@@ -270,7 +270,7 @@ async def report_found(
             "reporter_email": reporter_email,
             "user_id": current_user.get("id"),
             "created_at": get_timestamp(),
-            "ai_processing_status": "pending",
+            "ai_processing_status": "queued",
             "embedding_status": "pending",
         }
         
@@ -286,12 +286,12 @@ async def report_found(
         print(f"[REPORT_FOUND_BACKGROUND_TASK_INFO] task_runs_in_same_process=true")
         print(f"[REPORT_FOUND_BACKGROUND_TASK_INFO] task_survives_request=true")
         print(f"[REPORT_FOUND_BACKGROUND_TASK_INFO] task_lost_if_process_restarts=true")
+        print(f"[REPORT_FOUND_BACKGROUND_TASK_INFO] image_source=cloudinary_url")
         background_tasks.add_task(
             process_report_ai_pipeline,
             report_id=found_id,
             report_type="found",
             user_id=current_user.get("id") or reporter_email,
-            image_input=raw,
             report_collection_name="children_found",
         )
         print(f"[REPORT_FOUND_BACKGROUND_TASK_SCHEDULED] found_id={found_id}")

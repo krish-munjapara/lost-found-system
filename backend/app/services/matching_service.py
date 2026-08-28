@@ -398,8 +398,10 @@ async def run_matching_for_report(
     
     # Log best similarity score
     if scored_matches:
-        best_score = max(score[0] for score, _, _ in scored_matches)
+        # scored_matches structure: (final_score, raw_score, candidate)
+        best_score = max(final_score for final_score, _, _ in scored_matches)
         print(f"[MATCHING_BEST_SCORE] best_similarity={best_score} threshold={MATCH_THRESHOLD} passed={best_score >= MATCH_THRESHOLD}")
+        print(f"[MATCHING_SCORE_TYPE] type=float value={best_score}")
 
     created_matches: list[dict[str, Any]] = []
     now = get_timestamp()

@@ -30,21 +30,59 @@ def load_image_from_url_or_path(image_input: str | np.ndarray) -> np.ndarray | N
     if isinstance(image_input, str):
         import cv2
         if image_input.startswith("http://") or image_input.startswith("https://"):
-            print(f"[AI_IMAGE_DOWNLOAD_START] source=url url={image_input[:100]}...")
+            # Truncate URL to avoid logging sensitive signed URLs
+            url_prefix = image_input[:80] if len(image_input) > 80 else image_input
+            print(f"[AI_IMAGE_DOWNLOAD_START] source=url url={url_prefix}...")
             try:
-                import urllib.request
-                with urllib.request.urlopen(image_input) as response:
-                    image_bytes = response.read()
+                import requests
+                from urllib.parse import urlparse
+                url_host = urlparse(image_input).netloc
+                print(f"[AI_IMAGE_DOWNLOAD_HOST] host={url_host}")
+                
+                # Use requests with timeout and validation
+                response = requests.get(image_input, timeout=30, allow_redirects=True)
+                print(f"[AI_IMAGE_DOWNLOAD_RESPONSE] status={response.status_code} content_type={response.headers.get('Content-Type', 'unknown')}")
+                
+                if response.status_code != 200:
+                    print(f"[AI_IMAGE_DOWNLOAD_ERROR] url={url_prefix}... error=invalid_status status={response.status_code}")
+                    return None
+                
+                # Validate content type
+                content_type = response.headers.get('Content-Type', '')
+                if not content_type.startswith('image/'):
+                    print(f"[AI_IMAGE_DOWNLOAD_ERROR] url={url_prefix}... error=invalid_content_type content_type={content_type}")
+                    return None
+                
+                image_bytes = response.content
                 print(f"[AI_IMAGE_DOWNLOAD_SUCCESS] byte_size={len(image_bytes)}")
+                
+                # Decode using cv2
                 nparr = np.frombuffer(image_bytes, np.uint8)
                 decoded = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-                if decoded is not None:
-                    print(f"[AI_IMAGE_DOWNLOAD_SUCCESS] shape={decoded.shape}")
-                else:
-                    print(f"[AI_IMAGE_DOWNLOAD_ERROR] error=decode_failed")
+                if decoded is None:
+                    print(f"[AI_IMAGE_DECODE_ERROR] error=cv2_decode_failed")
+                    return None
+                
+                # Verify image dimensions
+                height, width = decoded.shape[:2]
+                channels = decoded.shape[2] if len(decoded.shape) == 3 else 1
+                print(f"[AI_IMAGE_DECODE_SUCCESS] width={width} height={height} channels={channels}")
+                
+                if width <= 0 or height <= 0:
+                    print(f"[AI_IMAGE_DECODE_ERROR] error=invalid_dimensions width={width} height={height}")
+                    return None
+                
+                # Convert grayscale to RGB if needed
+                if channels == 1:
+                    print(f"[AI_IMAGE_CONVERT] from=grayscale to=RGB")
+                    decoded = cv2.cvtColor(decoded, cv2.COLOR_GRAY2RGB)
+                elif channels == 4:
+                    print(f"[AI_IMAGE_CONVERT] from=RGBA to=RGB")
+                    decoded = cv2.cvtColor(decoded, cv2.COLOR_RGBA2RGB)
+                
                 return decoded
             except Exception as exc:
-                print(f"[AI_IMAGE_DOWNLOAD_ERROR] url={image_input[:100]}... error={str(exc)}")
+                print(f"[AI_IMAGE_DOWNLOAD_ERROR] url={url_prefix}... error_type={type(exc).__name__} error={str(exc)}")
                 return None
         else:
             print(f"[AI_IMAGE_DOWNLOAD_START] source=local_path path={image_input}")
@@ -54,13 +92,30 @@ def load_image_from_url_or_path(image_input: str | np.ndarray) -> np.ndarray | N
                 print(f"[AI_IMAGE_DOWNLOAD_SUCCESS] byte_size={len(image_bytes)}")
                 nparr = np.frombuffer(image_bytes, np.uint8)
                 decoded = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-                if decoded is not None:
-                    print(f"[AI_IMAGE_DOWNLOAD_SUCCESS] shape={decoded.shape}")
-                else:
-                    print(f"[AI_IMAGE_DOWNLOAD_ERROR] error=decode_failed")
+                if decoded is None:
+                    print(f"[AI_IMAGE_DECODE_ERROR] error=cv2_decode_failed")
+                    return None
+                
+                # Verify image dimensions
+                height, width = decoded.shape[:2]
+                channels = decoded.shape[2] if len(decoded.shape) == 3 else 1
+                print(f"[AI_IMAGE_DECODE_SUCCESS] width={width} height={height} channels={channels}")
+                
+                if width <= 0 or height <= 0:
+                    print(f"[AI_IMAGE_DECODE_ERROR] error=invalid_dimensions width={width} height={height}")
+                    return None
+                
+                # Convert grayscale to RGB if needed
+                if channels == 1:
+                    print(f"[AI_IMAGE_CONVERT] from=grayscale to=RGB")
+                    decoded = cv2.cvtColor(decoded, cv2.COLOR_GRAY2RGB)
+                elif channels == 4:
+                    print(f"[AI_IMAGE_CONVERT] from=RGBA to=RGB")
+                    decoded = cv2.cvtColor(decoded, cv2.COLOR_RGBA2RGB)
+                
                 return decoded
             except Exception as exc:
-                print(f"[AI_IMAGE_DOWNLOAD_ERROR] path={image_input} error={str(exc)}")
+                print(f"[AI_IMAGE_DOWNLOAD_ERROR] path={image_input} error_type={type(exc).__name__} error={str(exc)}")
                 return None
     return None
 
@@ -251,14 +306,14 @@ async def process_report_ai_pipeline(
     report_id: str,
     report_type: str,
     user_id: str | None,
-    image_input: str | bytes | np.ndarray,
     report_collection_name: str | None = None,
 ) -> None:
     """Background task: Generate embedding and run matching for a report.
     
     This function is designed to run in the background after the report
     has been successfully created and the HTTP response has been returned.
-    It updates the report document with processing status and results.
+    It fetches the report from MongoDB, downloads the image from Cloudinary,
+    and updates the report document with processing status and results.
     """
     from app.services.matching_service import run_matching_for_report
     
@@ -276,16 +331,60 @@ async def process_report_ai_pipeline(
     )
     
     try:
-        # Load image
-        print(f"[AI_IMAGE_LOAD] child_id={report_id}")
-        image = load_image_from_url_or_path(image_input)
-        if image is None:
-            print(f"[AI_JOB_ERROR] child_id={report_id} error=Image load failed")
+        # Fetch report from MongoDB to get image_url
+        print(f"[AI_REPORT_FETCH_START] child_id={report_id}")
+        report = await db[report_collection_name].find_one({"_id": report_obj_id})
+        if not report:
+            print(f"[AI_REPORT_FETCH_ERROR] child_id={report_id} error=report_not_found")
             await db[report_collection_name].update_one(
                 {"_id": report_obj_id},
-                {"$set": {"ai_processing_status": "failed", "embedding_status": "failed", "ai_processing_error": "Image load failed"}}
+                {"$set": {"ai_processing_status": "failed", "embedding_status": "failed", "ai_processing_error": "Report not found"}}
             )
             return
+        print(f"[AI_REPORT_FETCH_SUCCESS] child_id={report_id}")
+        
+        # Get image_url from report
+        image_url = report.get("image_url")
+        if not image_url:
+            print(f"[AI_REPORT_IMAGE_URL_ERROR] child_id={report_id} error=image_url_missing")
+            await db[report_collection_name].update_one(
+                {"_id": report_obj_id},
+                {"$set": {"ai_processing_status": "failed", "embedding_status": "failed", "ai_processing_error": "Image URL missing"}}
+            )
+            return
+        # Truncate URL to avoid logging sensitive signed URLs
+        url_prefix = image_url[:80] if len(image_url) > 80 else image_url
+        print(f"[AI_REPORT_IMAGE_URL_FOUND] child_id={report_id} url={url_prefix}...")
+        
+        # Load image from Cloudinary URL with retry mechanism
+        print(f"[AI_IMAGE_LOAD_START] child_id={report_id}")
+        print(f"[AI_IMAGE_SOURCE_TYPE] source_type=url")
+        
+        # Retry mechanism for image download (3 attempts)
+        max_retries = 3
+        image = None
+        last_error = None
+        
+        for attempt in range(1, max_retries + 1):
+            print(f"[AI_IMAGE_DOWNLOAD_ATTEMPT] attempt={attempt}/{max_retries}")
+            image = load_image_from_url_or_path(image_url)
+            if image is not None:
+                print(f"[AI_IMAGE_DOWNLOAD_SUCCESS] attempt={attempt}")
+                break
+            last_error = "Image load returned None"
+            if attempt < max_retries:
+                import asyncio
+                print(f"[AI_IMAGE_DOWNLOAD_RETRY] waiting_2s before_attempt={attempt + 1}")
+                await asyncio.sleep(2)
+        
+        if image is None:
+            print(f"[AI_IMAGE_LOAD_ERROR] child_id={report_id} source_type=url error={last_error} after_{max_retries}_attempts")
+            await db[report_collection_name].update_one(
+                {"_id": report_obj_id},
+                {"$set": {"ai_processing_status": "failed", "embedding_status": "failed", "ai_processing_error": last_error}}
+            )
+            return
+        print(f"[AI_IMAGE_LOAD_SUCCESS] child_id={report_id} image_shape={image.shape}")
         
         # Generate embedding
         print(f"[AI_EMBEDDING_START] child_id={report_id}")
