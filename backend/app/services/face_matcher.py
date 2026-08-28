@@ -5,7 +5,7 @@ Handles face encoding extraction, similarity computation, and confidence scoring
 """
 
 import json
-import signal
+import threading
 import numpy as np
 from app.config import DETECTOR_BACKEND, FACE_MODEL_NAME
 
@@ -16,97 +16,115 @@ _deepface = None
 _DETECTOR_BACKENDS = (DETECTOR_BACKEND, "opencv") if DETECTOR_BACKEND != "opencv" else ("opencv",)
 _model_initialized = False
 _model_init_error = None
-
-
-class TimeoutError(Exception):
-    """Custom timeout exception."""
-    pass
-
-
-def _timeout_handler(signum, frame):
-    """Signal handler for timeout."""
-    raise TimeoutError("Operation timed out")
+_model_init_lock = threading.Lock()
 
 
 def _get_deepface():
-    """Lazy-load DeepFace module with timeout-safe pre-warming."""
+    """Lazy-load DeepFace module with thread-safe initialization.
+    
+    Model initialization is protected by a lock to prevent concurrent initialization.
+    Pre-warming is skipped in worker threads to avoid signal handling issues.
+    """
     global _deepface, _model_initialized, _model_init_error
     
+    # Return cached instance if already loaded
     if _deepface is not None:
-        # Already loaded, return cached instance
         print(f"[AI_MODEL_INIT] Model already initialized, reusing cached instance")
         return _deepface
     
+    # Check if previous initialization failed
     if _model_init_error is not None:
-        # Previous initialization failed, don't retry
         print(f"[AI_MODEL_INIT] Previous initialization failed: {_model_init_error}")
         raise RuntimeError(f"Model initialization previously failed: {_model_init_error}")
     
-    print(f"[AI_MODEL_INIT_START] Starting DeepFace/TensorFlow initialization...")
-    
-    try:
-        from deepface import DeepFace
-        _deepface = DeepFace
-        print(f"[AI_MODEL_INIT_MODULE] DeepFace module imported successfully")
+    # Acquire lock to prevent concurrent initialization
+    with _model_init_lock:
+        # Double-check after acquiring lock (another thread may have initialized)
+        if _deepface is not None:
+            print(f"[AI_MODEL_INIT] Model initialized by another thread, reusing cached instance")
+            return _deepface
         
-        # Pre-warm the model with a timeout to prevent indefinite hangs
-        print(f"[AI_MODEL_INIT_PREWARM] Pre-loading {FACE_MODEL_NAME} model...")
-        print(f"[AI_MODEL_INIT_PREWARM] Detector backends to try: {_DETECTOR_BACKENDS}")
+        if _model_init_error is not None:
+            print(f"[AI_MODEL_INIT] Previous initialization failed: {_model_init_error}")
+            raise RuntimeError(f"Model initialization previously failed: {_model_init_error}")
         
-        dummy_img = np.zeros((224, 224, 3), dtype=np.uint8)
-        prewarm_success = False
+        # Log current thread
+        current_thread = threading.current_thread().name
+        is_main_thread = current_thread == "MainThread"
+        print(f"[AI_MODEL_INIT_START] Starting DeepFace/TensorFlow initialization...")
+        print(f"[AI_MODEL_INIT_THREAD] thread={current_thread} is_main={is_main_thread}")
         
-        for backend in _DETECTOR_BACKENDS:
+        try:
+            # Configure TensorFlow memory growth to reduce memory pressure
+            print(f"[AI_MODEL_INIT_TF_CONFIG] Configuring TensorFlow memory settings...")
             try:
-                print(f"[AI_MODEL_INIT_PREWARM] Attempting pre-load with detector backend: {backend}")
-                
-                # Set timeout for pre-warming (60 seconds)
-                if hasattr(signal, 'SIGALRM'):  # Unix-like systems
-                    signal.signal(signal.SIGALRM, _timeout_handler)
-                    signal.alarm(60)
-                
-                _deepface.represent(
-                    img_path=dummy_img,
-                    model_name=FACE_MODEL_NAME,
-                    detector_backend=backend,
-                    enforce_detection=False,
-                )
-                
-                if hasattr(signal, 'SIGALRM'):  # Cancel alarm if successful
-                    signal.alarm(0)
-                
-                print(f"[AI_MODEL_INIT_PREWARM_SUCCESS] {FACE_MODEL_NAME} model loaded successfully with {backend}")
-                prewarm_success = True
-                _model_initialized = True
-                break
-                
-            except TimeoutError:
-                print(f"[AI_MODEL_INIT_PREWARM_TIMEOUT] Pre-load with {backend} timed out after 60s")
-                if hasattr(signal, 'SIGALRM'):
-                    signal.alarm(0)
-                # Continue to next backend or skip pre-warming
-                continue
-                
-            except Exception as exc:
-                print(f"[AI_MODEL_INIT_PREWARM_WARNING] Model pre-load with {backend} warning: {exc}")
-                if hasattr(signal, 'SIGALRM'):
-                    signal.alarm(0)
-                # Continue to next backend
-                continue
-        
-        if prewarm_success:
-            print(f"[AI_MODEL_INIT_SUCCESS] Model initialization completed successfully")
-        else:
-            print(f"[AI_MODEL_INIT_SKIP] Pre-warming skipped or failed, model will load on first use")
-            print(f"[AI_MODEL_INIT_SKIP] This is acceptable - model will initialize during first embedding generation")
-            _model_initialized = True  # Mark as initialized even if pre-warming skipped
+                import os
+                os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # Suppress TensorFlow warnings
+                import tensorflow as tf
+                # Configure TensorFlow to use memory growth instead of allocating all GPU memory
+                gpus = tf.config.list_physical_devices('GPU')
+                if gpus:
+                    for gpu in gpus:
+                        tf.config.experimental.set_memory_growth(gpu, True)
+                    print(f"[AI_MODEL_INIT_TF_CONFIG] GPU memory growth enabled for {len(gpus)} device(s)")
+                else:
+                    print(f"[AI_MODEL_INIT_TF_CONFIG] No GPU devices found, using CPU")
+                # Limit CPU thread usage to reduce memory pressure
+                tf.config.threading.set_intra_op_parallelism_threads(1)
+                tf.config.threading.set_inter_op_parallelism_threads(1)
+                print(f"[AI_MODEL_INIT_TF_CONFIG] CPU parallelism limited to 1 thread")
+            except Exception as tf_config_error:
+                print(f"[AI_MODEL_INIT_TF_CONFIG_WARNING] TensorFlow configuration warning: {tf_config_error}")
+                print(f"[AI_MODEL_INIT_TF_CONFIG_WARNING] Continuing with default TensorFlow settings")
             
-    except Exception as e:
-        print(f"[AI_MODEL_INIT_FAILED] Model initialization failed: {e}")
-        import traceback
-        print(f"[AI_MODEL_INIT_FAILED] traceback={traceback.format_exc()}")
-        _model_init_error = str(e)
-        raise RuntimeError(f"Model initialization failed: {e}")
+            # Import DeepFace
+            from deepface import DeepFace
+            _deepface = DeepFace
+            print(f"[AI_MODEL_INIT_MODULE] DeepFace module imported successfully")
+            
+            # Skip pre-warming in worker threads to avoid signal handling issues
+            # Model will load on first actual use instead
+            if not is_main_thread:
+                print(f"[AI_MODEL_INIT_SKIP_PREWARM] Skipping pre-warming in worker thread (signal handling incompatible)")
+                print(f"[AI_MODEL_INIT_SKIP_PREWARM] Model will initialize on first embedding generation")
+            else:
+                print(f"[AI_MODEL_INIT_PREWARM] Pre-loading {FACE_MODEL_NAME} model in main thread...")
+                print(f"[AI_MODEL_INIT_PREWARM] Detector backends to try: {_DETECTOR_BACKENDS}")
+                
+                dummy_img = np.zeros((224, 224, 3), dtype=np.uint8)
+                prewarm_success = False
+                
+                for backend in _DETECTOR_BACKENDS:
+                    try:
+                        print(f"[AI_MODEL_INIT_PREWARM] Attempting pre-load with detector backend: {backend}")
+                        _deepface.represent(
+                            img_path=dummy_img,
+                            model_name=FACE_MODEL_NAME,
+                            detector_backend=backend,
+                            enforce_detection=False,
+                        )
+                        print(f"[AI_MODEL_INIT_PREWARM_SUCCESS] {FACE_MODEL_NAME} model loaded successfully with {backend}")
+                        prewarm_success = True
+                        break
+                    except Exception as exc:
+                        print(f"[AI_MODEL_INIT_PREWARM_WARNING] Model pre-load with {backend} warning: {exc}")
+                        continue
+                
+                if prewarm_success:
+                    print(f"[AI_MODEL_INIT_SUCCESS] Model initialization completed successfully with pre-warming")
+                else:
+                    print(f"[AI_MODEL_INIT_SKIP] Pre-warming failed, model will load on first use")
+            
+            # Mark as initialized even if pre-warming was skipped
+            _model_initialized = True
+            print(f"[AI_MODEL_INIT_SUCCESS] Model initialization completed")
+            
+        except Exception as e:
+            print(f"[AI_MODEL_INIT_FAILED] Model initialization failed: {e}")
+            import traceback
+            print(f"[AI_MODEL_INIT_FAILED] traceback={traceback.format_exc()}")
+            _model_init_error = str(e)
+            raise RuntimeError(f"Model initialization failed: {e}")
     
     return _deepface
 
