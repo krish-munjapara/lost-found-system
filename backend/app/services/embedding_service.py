@@ -195,6 +195,7 @@ def assess_image_quality(image_input: str | np.ndarray) -> dict[str, Any]:
         print(f"face_boxes={[(x, y, w, h) for x, y, w, h in faces]}")
 
         reasons: list[str] = []
+        face_crop_result = None
         
         # Check face count
         if len(valid_faces) == 0:
@@ -213,11 +214,13 @@ def assess_image_quality(image_input: str | np.ndarray) -> dict[str, Any]:
             if x <= 10 or y <= 10 or x + w >= frame_width - 10 or y + h >= frame_height - 10:
                 reasons.append("partially-hidden-face")
             
-            # Crop to the face for blur assessment
+            # Crop to the face for blur assessment AND embedding generation
             face_crop = image[y:y+h, x:x+w]
             if face_crop.size == 0:
                 reasons.append("face-crop-failed")
             else:
+                # Store the crop for embedding generation (even if there are soft warnings)
+                face_crop_result = face_crop
                 print(f"[CAMERA_QUALITY]")
                 print(f"face_crop_width={w}")
                 print(f"face_crop_height={h}")
@@ -250,17 +253,10 @@ def assess_image_quality(image_input: str | np.ndarray) -> dict[str, Any]:
                 "status": "low_quality",
                 "face_quality_score": round(score, 2),
                 "reasons": reasons,
+                "face_crop": face_crop_result,
             }
 
         print(f"[QUALITY] Final score: 1.0, status: good")
-        
-        # If we have exactly one valid face, include the crop for embedding generation
-        face_crop_result = None
-        if len(valid_faces) == 1:
-            x, y, w, h = valid_faces[0]
-            face_crop_result = image[y:y+h, x:x+w]
-            print(f"[QUALITY] Including face crop for embedding: {w}x{h}")
-        
         return {
             "status": "good",
             "face_quality_score": 1.0,
@@ -273,6 +269,7 @@ def assess_image_quality(image_input: str | np.ndarray) -> dict[str, Any]:
             "status": "unknown",
             "face_quality_score": 0.5,
             "reasons": [f"quality-check-error: {exc}"],
+            "face_crop": None,
         }
 
 
