@@ -1,132 +1,192 @@
 """
 Guardian-Link Face Matcher Service
-AI-powered face recognition using DeepFace with a configurable model.
+AI-powered face recognition using ONNX Runtime with ArcFace.
 Handles face encoding extraction, similarity computation, and confidence scoring.
 """
 
 import json
 import threading
 import numpy as np
+from pathlib import Path
 from app.config import DETECTOR_BACKEND, FACE_MODEL_NAME
 
 # ──────────────────────────────────────────────
-# Lazy-load DeepFace to avoid heavy imports on startup
+# ONNX Runtime Model Loading
 # ──────────────────────────────────────────────
-_deepface = None
-_DETECTOR_BACKENDS = (DETECTOR_BACKEND, "opencv") if DETECTOR_BACKEND != "opencv" else ("opencv",)
+_onnx_session = None
 _model_initialized = False
 _model_init_error = None
 _model_init_lock = threading.Lock()
+_embedding_model_version = "onnx_arcface_v1"
+_MODEL_PATH = Path(__file__).parent.parent.parent / "models" / "arcface.onnx"
 
 
-def _get_deepface():
-    """Lazy-load DeepFace module with thread-safe initialization.
+def _get_onnx_session():
+    """Lazy-load ONNX Runtime session with thread-safe initialization.
     
     Model initialization is protected by a lock to prevent concurrent initialization.
-    Pre-warming is skipped in worker threads to avoid signal handling issues.
+    The session is reused for all embedding generation requests.
     """
-    global _deepface, _model_initialized, _model_init_error
+    global _onnx_session, _model_initialized, _model_init_error
     
-    # Return cached instance if already loaded
-    if _deepface is not None:
-        print(f"[AI_MODEL_INIT] Model already initialized, reusing cached instance")
-        return _deepface
+    # Return cached session if already loaded
+    if _onnx_session is not None:
+        print(f"[AI_ONNX_MODEL_REUSE] Reusing existing ONNX session")
+        return _onnx_session
     
     # Check if previous initialization failed
     if _model_init_error is not None:
-        print(f"[AI_MODEL_INIT] Previous initialization failed: {_model_init_error}")
+        print(f"[AI_ONNX_MODEL_INIT_ERROR] Previous initialization failed: {_model_init_error}")
         raise RuntimeError(f"Model initialization previously failed: {_model_init_error}")
     
     # Acquire lock to prevent concurrent initialization
     with _model_init_lock:
         # Double-check after acquiring lock (another thread may have initialized)
-        if _deepface is not None:
-            print(f"[AI_MODEL_INIT] Model initialized by another thread, reusing cached instance")
-            return _deepface
+        if _onnx_session is not None:
+            print(f"[AI_ONNX_MODEL_REUSE] Session initialized by another thread, reusing")
+            return _onnx_session
         
         if _model_init_error is not None:
-            print(f"[AI_MODEL_INIT] Previous initialization failed: {_model_init_error}")
+            print(f"[AI_ONNX_MODEL_INIT_ERROR] Previous initialization failed: {_model_init_error}")
             raise RuntimeError(f"Model initialization previously failed: {_model_init_error}")
         
         # Log current thread
         current_thread = threading.current_thread().name
-        is_main_thread = current_thread == "MainThread"
-        print(f"[AI_MODEL_INIT_START] Starting DeepFace/TensorFlow initialization...")
-        print(f"[AI_MODEL_INIT_THREAD] thread={current_thread} is_main={is_main_thread}")
+        print(f"[AI_ONNX_MODEL_INIT_START] Starting ONNX Runtime initialization...")
+        print(f"[AI_ONNX_MODEL_INIT_THREAD] thread={current_thread}")
+        print(f"[AI_ONNX_MODEL_INIT_PATH] model_path={_MODEL_PATH}")
         
         try:
-            # Configure TensorFlow memory growth to reduce memory pressure
-            print(f"[AI_MODEL_INIT_TF_CONFIG] Configuring TensorFlow memory settings...")
-            try:
-                import os
-                os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # Suppress TensorFlow warnings
-                import tensorflow as tf
-                # Configure TensorFlow to use memory growth instead of allocating all GPU memory
-                gpus = tf.config.list_physical_devices('GPU')
-                if gpus:
-                    for gpu in gpus:
-                        tf.config.experimental.set_memory_growth(gpu, True)
-                    print(f"[AI_MODEL_INIT_TF_CONFIG] GPU memory growth enabled for {len(gpus)} device(s)")
-                else:
-                    print(f"[AI_MODEL_INIT_TF_CONFIG] No GPU devices found, using CPU")
-                # Limit CPU thread usage to reduce memory pressure
-                tf.config.threading.set_intra_op_parallelism_threads(1)
-                tf.config.threading.set_inter_op_parallelism_threads(1)
-                print(f"[AI_MODEL_INIT_TF_CONFIG] CPU parallelism limited to 1 thread")
-            except Exception as tf_config_error:
-                print(f"[AI_MODEL_INIT_TF_CONFIG_WARNING] TensorFlow configuration warning: {tf_config_error}")
-                print(f"[AI_MODEL_INIT_TF_CONFIG_WARNING] Continuing with default TensorFlow settings")
+            # Check if model file exists
+            if not _MODEL_PATH.exists():
+                print(f"[AI_ONNX_MODEL_INIT_ERROR] Model file not found at {_MODEL_PATH}")
+                print(f"[AI_ONNX_MODEL_INIT_ERROR] Run download_model.py to fetch the model")
+                _model_init_error = f"Model file not found at {_MODEL_PATH}"
+                raise RuntimeError(f"Model file not found at {_MODEL_PATH}")
             
-            # Import DeepFace
-            from deepface import DeepFace
-            _deepface = DeepFace
-            print(f"[AI_MODEL_INIT_MODULE] DeepFace module imported successfully")
+            # Import ONNX Runtime
+            import onnxruntime as ort
+            print(f"[AI_ONNX_MODEL_INIT_MODULE] ONNX Runtime imported successfully")
             
-            # Skip pre-warming in worker threads to avoid signal handling issues
-            # Model will load on first actual use instead
-            if not is_main_thread:
-                print(f"[AI_MODEL_INIT_SKIP_PREWARM] Skipping pre-warming in worker thread (signal handling incompatible)")
-                print(f"[AI_MODEL_INIT_SKIP_PREWARM] Model will initialize on first embedding generation")
-            else:
-                print(f"[AI_MODEL_INIT_PREWARM] Pre-loading {FACE_MODEL_NAME} model in main thread...")
-                print(f"[AI_MODEL_INIT_PREWARM] Detector backends to try: {_DETECTOR_BACKENDS}")
-                
-                dummy_img = np.zeros((224, 224, 3), dtype=np.uint8)
-                prewarm_success = False
-                
-                for backend in _DETECTOR_BACKENDS:
-                    try:
-                        print(f"[AI_MODEL_INIT_PREWARM] Attempting pre-load with detector backend: {backend}")
-                        _deepface.represent(
-                            img_path=dummy_img,
-                            model_name=FACE_MODEL_NAME,
-                            detector_backend=backend,
-                            enforce_detection=False,
-                        )
-                        print(f"[AI_MODEL_INIT_PREWARM_SUCCESS] {FACE_MODEL_NAME} model loaded successfully with {backend}")
-                        prewarm_success = True
-                        break
-                    except Exception as exc:
-                        print(f"[AI_MODEL_INIT_PREWARM_WARNING] Model pre-load with {backend} warning: {exc}")
-                        continue
-                
-                if prewarm_success:
-                    print(f"[AI_MODEL_INIT_SUCCESS] Model initialization completed successfully with pre-warming")
-                else:
-                    print(f"[AI_MODEL_INIT_SKIP] Pre-warming failed, model will load on first use")
+            # Configure ONNX Runtime for CPU inference with limited threads
+            ort_session_options = ort.SessionOptions()
+            ort_session_options.intra_op_num_threads = 1
+            ort_session_options.inter_op_num_threads = 1
+            ort_session_options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
+            print(f"[AI_ONNX_MODEL_INIT_CONFIG] CPU threads limited to 1")
+            print(f"[AI_ONNX_MODEL_INIT_CONFIG] Sequential execution mode enabled")
             
-            # Mark as initialized even if pre-warming was skipped
+            # Create inference session
+            print(f"[AI_ONNX_MODEL_INIT_LOADING] Loading ArcFace ONNX model...")
+            _onnx_session = ort.InferenceSession(
+                str(_MODEL_PATH),
+                sess_options=ort_session_options,
+                providers=['CPUExecutionProvider']
+            )
+            print(f"[AI_ONNX_MODEL_INIT_SUCCESS] ONNX session created successfully")
+            
+            # Log model input/output info
+            input_name = _onnx_session.get_inputs()[0].name
+            input_shape = _onnx_session.get_inputs()[0].shape
+            output_name = _onnx_session.get_outputs()[0].name
+            output_shape = _onnx_session.get_outputs()[0].shape
+            print(f"[AI_ONNX_MODEL_INIT_INFO] input_name={input_name} input_shape={input_shape}")
+            print(f"[AI_ONNX_MODEL_INIT_INFO] output_name={output_name} output_shape={output_shape}")
+            
+            # Mark as initialized
             _model_initialized = True
-            print(f"[AI_MODEL_INIT_SUCCESS] Model initialization completed")
+            print(f"[AI_ONNX_MODEL_INIT_COMPLETE] Model initialization completed")
             
         except Exception as e:
-            print(f"[AI_MODEL_INIT_FAILED] Model initialization failed: {e}")
+            print(f"[AI_ONNX_MODEL_INIT_ERROR] Model initialization failed: {e}")
             import traceback
-            print(f"[AI_MODEL_INIT_FAILED] traceback={traceback.format_exc()}")
+            print(f"[AI_ONNX_MODEL_INIT_ERROR] Traceback: {traceback.format_exc()}")
             _model_init_error = str(e)
             raise RuntimeError(f"Model initialization failed: {e}")
     
-    return _deepface
+    return _onnx_session
+
+
+def _preprocess_face_for_onnx(face_crop: np.ndarray) -> np.ndarray:
+    """Preprocess face crop for ONNX ArcFace model.
+    
+    Preprocessing steps:
+    1. BGR to RGB conversion
+    2. Resize to 112x112
+    3. Normalize to [-1, 1]: (img.astype(np.float32) - 127.5) / 128.0
+    4. Add batch dimension: (1, 112, 112, 3)
+    
+    Args:
+        face_crop: Pre-cropped face image (numpy array, BGR format)
+    
+    Returns:
+        Preprocessed tensor ready for ONNX inference
+    """
+    import cv2
+    
+    # Convert BGR to RGB
+    if len(face_crop.shape) == 3 and face_crop.shape[2] == 3:
+        face_rgb = cv2.cvtColor(face_crop, cv2.COLOR_BGR2RGB)
+    else:
+        face_rgb = face_crop
+    
+    # Resize to 112x112
+    face_resized = cv2.resize(face_rgb, (112, 112))
+    
+    # Normalize to [-1, 1]
+    face_normalized = (face_resized.astype(np.float32) - 127.5) / 128.0
+    
+    # Add batch dimension
+    face_batch = face_normalized[np.newaxis, ...]  # Shape: (1, 112, 112, 3)
+    
+    return face_batch
+
+
+def _generate_onnx_embedding(face_crop: np.ndarray) -> list[float] | None:
+    """Generate face embedding using ONNX Runtime ArcFace model.
+    
+    Args:
+        face_crop: Pre-cropped face image (numpy array)
+    
+    Returns:
+        L2-normalized embedding as list of floats, or None on failure
+    """
+    try:
+        print(f"[AI_ONNX_INFERENCE_START] input_shape={face_crop.shape}")
+        
+        # Get ONNX session
+        session = _get_onnx_session()
+        
+        # Preprocess face
+        preprocessed = _preprocess_face_for_onnx(face_crop)
+        print(f"[AI_ONNX_INFERENCE_PREPROCESS] preprocessed_shape={preprocessed.shape}")
+        
+        # Get input/output names
+        input_name = session.get_inputs()[0].name
+        output_name = session.get_outputs()[0].name
+        
+        # Run inference
+        embedding = session.run([output_name], {input_name: preprocessed})[0][0]
+        print(f"[AI_ONNX_INFERENCE_SUCCESS] embedding_shape={embedding.shape}")
+        
+        # L2 normalize embedding
+        embedding_norm = np.linalg.norm(embedding)
+        if embedding_norm > 0:
+            embedding_normalized = embedding / embedding_norm
+        else:
+            print(f"[AI_ONNX_INFERENCE_WARNING] embedding_norm=0, skipping normalization")
+            embedding_normalized = embedding
+        
+        embedding_list = embedding_normalized.tolist()
+        print(f"[AI_ONNX_EMBEDDING_RESULT] dimensions={len(embedding_list)}")
+        
+        return embedding_list
+        
+    except Exception as exc:
+        print(f"[AI_ONNX_INFERENCE_ERROR] error={str(exc)}")
+        import traceback
+        print(f"[AI_ONNX_INFERENCE_TRACEBACK]\n{traceback.format_exc()}")
+        return None
 
 
 def load_image_from_url_or_path(image_input: str | np.ndarray) -> np.ndarray | None:
@@ -158,111 +218,47 @@ def load_image_from_url_or_path(image_input: str | np.ndarray) -> np.ndarray | N
     return None
 
 
-def _try_represent(DeepFace, image_input: str | np.ndarray, use_pre_cropped_face: bool = False):
-    """Try RetinaFace first and fall back to OpenCV without raising.
-    
-    If use_pre_cropped_face is True, skip face detection and use detector_backend='skip'.
-    """
-    import os
-    import sys
-    
-    print(f"[AI_ARCFACE_INFERENCE_START] pid={os.getpid()} thread={threading.current_thread().name} use_pre_cropped_face={use_pre_cropped_face}")
-    
-    img_arr = load_image_from_url_or_path(image_input)
-    if img_arr is None:
-        print("❌ Image loading failed, cannot represent")
-        return None, None
-    
-    if img_arr is not None:
-        print(f"[AI_ARCFACE_INFERENCE_DIAGNOSTICS] image_shape={img_arr.shape}")
-
-    last_error = None
-    
-    # If face is already cropped, skip detection entirely
-    if use_pre_cropped_face:
-        try:
-            print(f"[AI_ARCFACE_MODEL_LOAD_START] model={FACE_MODEL_NAME} detector=skip")
-            print(f"[AI_ARCFACE_INFERENCE_START] detector=skip (pre-cropped face)")
-            results = DeepFace.represent(
-                img_path=img_arr,
-                model_name=FACE_MODEL_NAME,
-                detector_backend="skip",
-                enforce_detection=False,
-            )
-            print(f"[AI_ARCFACE_MODEL_LOAD_SUCCESS] model={FACE_MODEL_NAME} detector=skip")
-            print(f"[AI_ARCFACE_INFERENCE_SUCCESS] detector=skip")
-            if results:
-                embedding = results[0].get("embedding")
-                if embedding is not None:
-                    print(f"[AI_ARCFACE_INFERENCE_RESULT] embedding_generated=true dimensions={len(embedding)}")
-                    return embedding, "skip"
-            last_error = RuntimeError(f"no embedding returned from skip detector")
-        except Exception as exc:
-            last_error = exc
-            print(f"[AI_ARCFACE_MODEL_LOAD_ERROR] model={FACE_MODEL_NAME} detector=skip error={str(exc)}")
-            print(f"[AI_ARCFACE_INFERENCE_ERROR] detector=skip error={str(exc)}")
-            import traceback
-            print(f"[AI_ARCFACE_INFERENCE_TRACEBACK] detector=skip\n{traceback.format_exc()}")
-    else:
-        # Original behavior: try detector backends
-        for backend in _DETECTOR_BACKENDS:
-            try:
-                print(f"[AI_ARCFACE_MODEL_LOAD_START] model={FACE_MODEL_NAME} detector={backend}")
-                print(f"[AI_ARCFACE_INFERENCE_START] detector={backend}")
-                results = DeepFace.represent(
-                    img_path=img_arr,
-                    model_name=FACE_MODEL_NAME,
-                    detector_backend=backend,
-                    enforce_detection=True,
-                )
-                print(f"[AI_ARCFACE_MODEL_LOAD_SUCCESS] model={FACE_MODEL_NAME} detector={backend}")
-                print(f"[AI_ARCFACE_INFERENCE_SUCCESS] detector={backend}")
-                if results:
-                    embedding = results[0].get("embedding")
-                    if embedding is not None:
-                        print(f"[AI_ARCFACE_INFERENCE_RESULT] embedding_generated=true dimensions={len(embedding)}")
-                        return embedding, backend
-                last_error = RuntimeError(f"no embedding returned from {backend}")
-            except Exception as exc:
-                last_error = exc
-                print(f"[AI_ARCFACE_MODEL_LOAD_ERROR] model={FACE_MODEL_NAME} detector={backend} error={str(exc)}")
-                print(f"[AI_ARCFACE_INFERENCE_ERROR] detector={backend} error={str(exc)}")
-                import traceback
-                print(f"[AI_ARCFACE_INFERENCE_TRACEBACK] detector={backend}\n{traceback.format_exc()}")
-
-    if last_error is not None:
-        print(f"❌ Face detection failed: {last_error}")
-    return None, None
-
-
-# ──────────────────────────────────────────────
-# Face Encoding
-# ──────────────────────────────────────────────
 def get_face_encoding(image_input: str | np.ndarray, use_pre_cropped_face: bool = False) -> str | None:
     """
-    Detect faces in an image and return the facial encoding as a JSON string.
+    Generate face embedding using ONNX Runtime ArcFace model.
 
     Args:
-        image_input: Path to the image file or a numpy array
-        use_pre_cropped_face: If True, skip face detection and use detector_backend='skip'
+        image_input: Path to the image file or a numpy array (should be pre-cropped face)
+        use_pre_cropped_face: If True, image_input is already a face crop (no detection needed)
 
     Returns:
-        JSON string of the face embedding, or None if no face detected
+        JSON string of the face embedding, or None if embedding generation fails
     """
+    import os
+    
     try:
         print(f"[AI_EMBEDDING] Starting face encoding process use_pre_cropped_face={use_pre_cropped_face}")
-        DeepFace = _get_deepface()
-        print(f"[AI_EMBEDDING] DeepFace module loaded")
-        embedding, _ = _try_represent(DeepFace, image_input, use_pre_cropped_face)
+        print(f"[AI_EMBEDDING] pid={os.getpid()} thread={threading.current_thread().name}")
+        
+        # Load image if path provided
+        if isinstance(image_input, str):
+            img_arr = load_image_from_url_or_path(image_input)
+            if img_arr is None:
+                print("❌ Image loading failed, cannot generate embedding")
+                return None
+        else:
+            img_arr = image_input
+        
+        print(f"[AI_EMBEDDING] image_shape={img_arr.shape}")
+        
+        # Generate embedding using ONNX
+        embedding = _generate_onnx_embedding(img_arr)
+        
         if embedding is None:
-            print(f"[AI_EMBEDDING] No face detected in image")
+            print(f"[AI_EMBEDDING] Embedding generation failed")
             return None
-        print(f"[AI_EMBEDDING] Face encoding generated successfully")
+        
+        print(f"[AI_EMBEDDING] Face encoding generated successfully dimensions={len(embedding)}")
         return json.dumps(embedding)
 
     except RuntimeError as e:
         # Specific handling for model initialization failures
-        if "initialization" in str(e).lower():
+        if "initialization" in str(e).lower() or "model" in str(e).lower():
             print(f"[AI_EMBEDDING] Model initialization error: {e}")
             print(f"[AI_EMBEDDING] This indicates a critical model loading failure")
             return None
@@ -270,7 +266,7 @@ def get_face_encoding(image_input: str | np.ndarray, use_pre_cropped_face: bool 
             print(f"[AI_EMBEDDING] Runtime error: {e}")
             return None
     except Exception as e:
-        print(f"[AI_EMBEDDING] Face detection failed: {e}")
+        print(f"[AI_EMBEDDING] Embedding generation failed: {e}")
         import traceback
         print(f"[AI_EMBEDDING] Traceback: {traceback.format_exc()}")
         return None

@@ -105,7 +105,7 @@ const Matches = () => {
         </div>
       ) : filteredMatches.length > 0 ? (
         <div className="flex flex-col gap-6">
-          {filteredMatches.map((m, idx) => (
+          {filteredMatches.slice(0, 5).map((m, idx) => (
             <MatchCard 
               key={m.id || idx} 
               match={m} 

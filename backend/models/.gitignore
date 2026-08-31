@@ -1,0 +1,6 @@
+# Ignore large model files - download during deployment
+*.onnx
+*.bin
+
+# Download script will fetch arcface.onnx from Hugging Face
+# Model URL: https://huggingface.co/garavv/arcface-onnx/resolve/main/arc.onnx

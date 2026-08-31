@@ -72,6 +72,10 @@ async def _get_embedding_for_report(db: Any, report_id: str | None) -> list[floa
         pass
     doc = await db.face_embeddings.find_one({"report_id": query_id})
     if doc and isinstance(doc.get("embedding"), list):
+        # DIAGNOSTIC: Log embedding version for debugging
+        embedding_version = doc.get("embedding_model_version", "UNKNOWN")
+        embedding_dim = len(doc["embedding"])
+        print(f"[MATCHING_EMBEDDING_RETRIEVED] report_id={report_id} version={embedding_version} dim={embedding_dim}")
         return doc["embedding"]
     return None
 
@@ -252,6 +256,10 @@ async def filter_candidate_reports(
             )
             continue
         if not _is_gender_compatible(source_report.get("gender"), candidate.get("gender")):
+            # DIAGNOSTIC: Log actual gender values
+            source_gender = source_report.get("gender")
+            target_gender = candidate.get("gender")
+            print(f"[MATCHING_FILTER_GENDER] source={source_gender} target={target_gender} candidate_id={candidate_id}")
             log_event(
                 "Rejected Reason",
                 report_id=report_id,
@@ -261,6 +269,10 @@ async def filter_candidate_reports(
             )
             continue
         if not _is_age_compatible(source_report.get("age"), candidate.get("age")):
+            # DIAGNOSTIC: Log actual age values
+            source_age = source_report.get("age")
+            target_age = candidate.get("age")
+            print(f"[MATCHING_FILTER_AGE] source={source_age} target={target_age} candidate_id={candidate_id}")
             log_event(
                 "Rejected Reason",
                 report_id=report_id,
@@ -270,6 +282,10 @@ async def filter_candidate_reports(
             )
             continue
         if not _is_location_compatible(source_report.get("location_structured"), candidate.get("location_structured")):
+            # DIAGNOSTIC: Log location mismatch
+            source_loc = source_report.get("location_structured")
+            target_loc = candidate.get("location_structured")
+            print(f"[MATCHING_FILTER_LOCATION] source={source_loc} target={target_loc} candidate_id={candidate_id}")
             log_event(
                 "Rejected Reason",
                 report_id=report_id,
