@@ -26,6 +26,15 @@ async def create_ai_job(
     """Create a persistent AI job for a report."""
     db = get_db()
     
+    # SAFETY CHECK: Ensure database connection is valid
+    if db is None:
+        raise RuntimeError("Database connection not initialized. Cannot create AI job.")
+    
+    # DIAGNOSTIC: Log database and collection info
+    from app.config import DATABASE_NAME
+    print(f"[AI_JOB_DB_INFO] database={DATABASE_NAME} collection=ai_jobs")
+    print(f"[AI_JOB_DB_CHECK] db_instance={type(db)} db_name={db.name if hasattr(db, 'name') else 'unknown'}")
+    
     job_doc = {
         "report_id": report_id,
         "report_type": report_type,
@@ -40,9 +49,19 @@ async def create_ai_job(
         "next_retry_at": None,
     }
     
+    print(f"[AI_JOB_INSERT_DOCUMENT] status={job_doc['status']} report_id={report_id} report_type={report_type}")
+    
     result = await db.ai_jobs.insert_one(job_doc)
     job_id = str(result.inserted_id)
     print(f"[AI_JOB_CREATED] job_id={job_id} report_id={report_id} report_type={report_type}")
+    
+    # DIAGNOSTIC: Verify job was actually inserted
+    inserted_job = await db.ai_jobs.find_one({"_id": result.inserted_id})
+    if inserted_job:
+        print(f"[AI_JOB_POST_INSERT_VERIFY] job_found=true stored_status={inserted_job.get('status')}")
+    else:
+        print(f"[AI_JOB_POST_INSERT_VERIFY] job_found=false ERROR")
+    
     return job_id
 
 
@@ -52,10 +71,26 @@ async def claim_ai_job(timeout_seconds: int = 300) -> dict[str, Any] | None:
     Also reclaims jobs stuck in 'processing' status for longer than timeout.
     """
     db = get_db()
+    
+    # SAFETY CHECK: Ensure database connection is valid
+    if db is None:
+        print(f"[AI_WORKER_DB_ERROR] Database connection not initialized")
+        return None
+    
     now = get_timestamp()
     timeout_timestamp = now - timedelta(seconds=timeout_seconds)
     
+    # DIAGNOSTIC: Log database and collection info
+    from app.config import DATABASE_NAME
+    print(f"[AI_WORKER_DB_INFO] database={DATABASE_NAME} collection=ai_jobs")
+    print(f"[AI_WORKER_DB_CHECK] db_instance={type(db)} db_name={db.name if hasattr(db, 'name') else 'unknown'}")
+    
     print(f"[AI_JOB_CLAIM_QUERY] Starting job claim query...")
+    
+    # DIAGNOSTIC: Check recent job statuses
+    recent_jobs = await db.ai_jobs.find({}).sort("created_at", -1).limit(5).to_list(length=5)
+    recent_statuses = [job.get("status") for job in recent_jobs]
+    print(f"[AI_JOB_RECENT_STATUSES] count={len(recent_jobs)} statuses={recent_statuses}")
     
     # First, reclaim stuck jobs
     reclaim_result = await db.ai_jobs.update_many(
@@ -77,7 +112,11 @@ async def claim_ai_job(timeout_seconds: int = 300) -> dict[str, Any] | None:
     
     # Count queued jobs before claiming
     queued_count = await db.ai_jobs.count_documents({"status": "queued"})
-    print(f"[AI_JOB_CLAIM_QUERY] Queued jobs count: {queued_count}")
+    print(f"[AI_JOB_CLAIM_DIAGNOSTIC] queued_count={queued_count}")
+    
+    # DIAGNOSTIC: Count all jobs regardless of status
+    total_count = await db.ai_jobs.count_documents({})
+    print(f"[AI_JOB_CLAIM_DIAGNOSTIC] total_jobs_count={total_count}")
     
     # Atomically claim a queued job
     job = await db.ai_jobs.find_one_and_update(
