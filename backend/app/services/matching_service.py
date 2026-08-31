@@ -203,7 +203,21 @@ async def filter_candidate_reports(
     candidate_collection_name: str,
     report_type: str,
 ) -> list[dict[str, Any]]:
-    """Pre-filter candidate reports before any expensive AI scoring."""
+    """Pre-filter candidate reports before any expensive AI scoring.
+    
+    HARD FILTERS (must pass to proceed):
+    - Not the same report
+    - Opposite report type (missing vs found)
+    - Not resolved/inactive
+    - Has valid embedding
+    - Embedding status is success or success_with_warnings
+    
+    SOFT FILTERS (logged as warnings, do NOT block):
+    - Gender mismatch
+    - Age mismatch
+    - Location mismatch
+    - Same user ID
+    """
     # Defensive validation: enforce collection isolation based on report_type
     if report_type == "missing":
         expected_collection = "children_found"
@@ -228,6 +242,10 @@ async def filter_candidate_reports(
 
     candidate_reports: list[dict[str, Any]] = []
     source_user_id = source_report.get("user_id")
+    
+    # DIAGNOSTIC: Log candidate collection and query
+    print(f"[MATCH_CANDIDATES] opposite_type={candidate_collection_name} expected_opposite={'found' if report_type == 'missing' else 'missing'}")
+    
     async for candidate in db[candidate_collection_name].find(candidate_query):
         candidate_id = str(candidate.get("_id"))
         candidate_user_id = candidate.get("user_id")
@@ -237,63 +255,29 @@ async def filter_candidate_reports(
         has_embedding = candidate_embedding is not None
         is_active = str(candidate.get("status", "")).strip().lower() not in {"resolved", "archived", "closed"}
 
-        if same_report or same_user or not is_active:
+        # HARD FILTER: Same report
+        if same_report:
             log_event(
                 "Rejected Reason",
                 report_id=report_id,
                 candidate_id=candidate_id,
-                reason="self-or-inactive",
+                reason="same-report",
                 source_report_type=report_type,
             )
             continue
-        if candidate.get("status") == "Resolved":
+        
+        # HARD FILTER: Inactive/Resolved status
+        if not is_active or candidate.get("status") == "Resolved":
             log_event(
                 "Rejected Reason",
                 report_id=report_id,
                 candidate_id=candidate_id,
-                reason="resolved",
+                reason="inactive-or-resolved",
                 source_report_type=report_type,
             )
             continue
-        if not _is_gender_compatible(source_report.get("gender"), candidate.get("gender")):
-            # DIAGNOSTIC: Log actual gender values
-            source_gender = source_report.get("gender")
-            target_gender = candidate.get("gender")
-            print(f"[MATCHING_FILTER_GENDER] source={source_gender} target={target_gender} candidate_id={candidate_id}")
-            log_event(
-                "Rejected Reason",
-                report_id=report_id,
-                candidate_id=candidate_id,
-                reason="gender-mismatch",
-                source_report_type=report_type,
-            )
-            continue
-        if not _is_age_compatible(source_report.get("age"), candidate.get("age")):
-            # DIAGNOSTIC: Log actual age values
-            source_age = source_report.get("age")
-            target_age = candidate.get("age")
-            print(f"[MATCHING_FILTER_AGE] source={source_age} target={target_age} candidate_id={candidate_id}")
-            log_event(
-                "Rejected Reason",
-                report_id=report_id,
-                candidate_id=candidate_id,
-                reason="age-mismatch",
-                source_report_type=report_type,
-            )
-            continue
-        if not _is_location_compatible(source_report.get("location_structured"), candidate.get("location_structured")):
-            # DIAGNOSTIC: Log location mismatch
-            source_loc = source_report.get("location_structured")
-            target_loc = candidate.get("location_structured")
-            print(f"[MATCHING_FILTER_LOCATION] source={source_loc} target={target_loc} candidate_id={candidate_id}")
-            log_event(
-                "Rejected Reason",
-                report_id=report_id,
-                candidate_id=candidate_id,
-                reason="location-mismatch",
-                source_report_type=report_type,
-            )
-            continue
+        
+        # HARD FILTER: Missing embedding
         if not has_embedding:
             log_event(
                 "Rejected Reason",
@@ -303,6 +287,39 @@ async def filter_candidate_reports(
                 source_report_type=report_type,
             )
             continue
+        
+        # SOFT FILTERS: Log warnings but do NOT reject
+        metadata_warnings = []
+        
+        # Gender mismatch warning
+        if not _is_gender_compatible(source_report.get("gender"), candidate.get("gender")):
+            source_gender = source_report.get("gender")
+            target_gender = candidate.get("gender")
+            metadata_warnings.append("gender_mismatch")
+            print(f"[MATCH_METADATA_WARNING] candidate_report_id={candidate_id} warnings=[gender_mismatch] source_gender={source_gender} target_gender={target_gender}")
+        
+        # Age mismatch warning
+        if not _is_age_compatible(source_report.get("age"), candidate.get("age")):
+            source_age = source_report.get("age")
+            target_age = candidate.get("age")
+            metadata_warnings.append("age_difference")
+            print(f"[MATCH_METADATA_WARNING] candidate_report_id={candidate_id} warnings=[age_difference] source_age={source_age} target_age={target_age}")
+        
+        # Location mismatch warning
+        if not _is_location_compatible(source_report.get("location_structured"), candidate.get("location_structured")):
+            source_loc = source_report.get("location_structured")
+            target_loc = candidate.get("location_structured")
+            metadata_warnings.append("location_difference")
+            print(f"[MATCH_METADATA_WARNING] candidate_report_id={candidate_id} warnings=[location_difference] source_location={source_loc} target_location={target_loc}")
+        
+        # Same user warning
+        if same_user:
+            metadata_warnings.append("same_user")
+            print(f"[MATCH_METADATA_WARNING] candidate_report_id={candidate_id} warnings=[same_user]")
+        
+        # Attach metadata warnings to candidate for later use
+        candidate["_metadata_warnings"] = metadata_warnings
+        
         candidate_reports.append(candidate)
         log_event(
             "Candidates Found",
@@ -316,6 +333,7 @@ async def filter_candidate_reports(
 
 async def score_candidate_matches(
     db: Any,
+    source_report: dict[str, Any],
     source_embedding: list[float],
     candidate_reports: list[dict[str, Any]],
     source_report_id: str | None = None,
@@ -324,17 +342,31 @@ async def score_candidate_matches(
     """Run AI similarity scoring only for already-filtered candidates."""
     scored_matches: list[tuple[float, float, dict[str, Any]]] = []
     for candidate in candidate_reports:
-        target_embedding = await _get_embedding_for_report(db, str(candidate.get("_id")))
+        candidate_id = str(candidate.get("_id"))
+        target_embedding = await _get_embedding_for_report(db, candidate_id)
         raw_score = _cosine_similarity(source_embedding, target_embedding)
         final_score = _finalize_match_score(raw_score)
+        
+        # Get metadata warnings from candidate
+        metadata_warnings = candidate.get("_metadata_warnings", [])
+        
+        # DIAGNOSTIC: Log each comparison with metadata details
+        matched = raw_score >= match_threshold
+        print(f"[MATCH_COMPARISON] source_report_id={source_report_id} candidate_report_id={candidate_id} face_similarity={raw_score} gender_source={source_report.get('gender')} gender_candidate={candidate.get('gender')} age_source={source_report.get('age')} age_candidate={candidate.get('age')} location_source={source_report.get('location_structured')} location_candidate={candidate.get('location_structured')}")
+        
+        if metadata_warnings:
+            print(f"[MATCH_METADATA_WARNING] candidate_report_id={candidate_id} warnings={metadata_warnings}")
+        
         log_event(
             "Similarity Calculated",
-            report_id=str(candidate.get("_id")),
+            report_id=candidate_id,
             source_report_id=source_report_id,
             raw_score=raw_score,
             final_score=final_score,
         )
+        
         if raw_score < match_threshold:
+            print(f"[MATCH_THRESHOLD_REJECTED] candidate_report_id={candidate_id} similarity={raw_score} threshold={match_threshold}")
             continue
         scored_matches.append((final_score, raw_score, candidate))
 
@@ -399,11 +431,13 @@ async def run_matching_for_report(
     print(f"[MATCHING_CANDIDATES_FOUND] count={len(candidate_reports)}")
 
     if len(candidate_reports) == 0:
+        print(f"[MATCHING_NO_CANDIDATES] report_id={report_id} expected_opposite_type={'found' if report_type == 'missing' else 'missing'}")
         print(f"[MATCHING_COMPLETE] matches_created=0 reason=no_candidates")
         return []
 
     scored_matches = await score_candidate_matches(
         db,
+        source_report,
         source_embedding,
         candidate_reports,
         source_report_id=str(report_obj_id),
@@ -438,6 +472,10 @@ async def run_matching_for_report(
             continue
 
         print(f"[MATCHING_CREATE] rank={rank} score={score} raw_score={raw_score}")
+        
+        # Get metadata warnings from candidate
+        metadata_warnings = candidate.get("_metadata_warnings", [])
+        
         match_doc = {
             "missing_id": missing_id,
             "found_id": found_id,
@@ -452,10 +490,15 @@ async def run_matching_for_report(
             "status": "Pending",
             "created_at": now,
             "updated_at": now,
+            "metadata_warnings": metadata_warnings,
         }
         result = await db.matches.insert_one(match_doc)
         match_doc["_id"] = str(result.inserted_id)
         created_matches.append(match_doc)
+        
+        # DIAGNOSTIC: Log successful match creation
+        print(f"[MATCH_FOUND] missing_report_id={missing_id} found_report_id={found_id} similarity={raw_score}")
+        print(f"[MATCH_SAVED] match_id={result.inserted_id}")
         
         # Update the missing child's status to "Ai Matches"
         await db.children.update_one(
