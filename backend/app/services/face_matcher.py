@@ -158,12 +158,15 @@ def load_image_from_url_or_path(image_input: str | np.ndarray) -> np.ndarray | N
     return None
 
 
-def _try_represent(DeepFace, image_input: str | np.ndarray):
-    """Try RetinaFace first and fall back to OpenCV without raising."""
+def _try_represent(DeepFace, image_input: str | np.ndarray, use_pre_cropped_face: bool = False):
+    """Try RetinaFace first and fall back to OpenCV without raising.
+    
+    If use_pre_cropped_face is True, skip face detection and use detector_backend='skip'.
+    """
     import os
     import sys
     
-    print(f"[AI_ARCFACE_INFERENCE_START] pid={os.getpid()} thread={threading.current_thread().name}")
+    print(f"[AI_ARCFACE_INFERENCE_START] pid={os.getpid()} thread={threading.current_thread().name} use_pre_cropped_face={use_pre_cropped_face}")
     
     img_arr = load_image_from_url_or_path(image_input)
     if img_arr is None:
@@ -174,30 +177,58 @@ def _try_represent(DeepFace, image_input: str | np.ndarray):
         print(f"[AI_ARCFACE_INFERENCE_DIAGNOSTICS] image_shape={img_arr.shape}")
 
     last_error = None
-    for backend in _DETECTOR_BACKENDS:
+    
+    # If face is already cropped, skip detection entirely
+    if use_pre_cropped_face:
         try:
-            print(f"[AI_ARCFACE_MODEL_LOAD_START] model={FACE_MODEL_NAME} detector={backend}")
-            print(f"[AI_ARCFACE_INFERENCE_START] detector={backend}")
+            print(f"[AI_ARCFACE_MODEL_LOAD_START] model={FACE_MODEL_NAME} detector=skip")
+            print(f"[AI_ARCFACE_INFERENCE_START] detector=skip (pre-cropped face)")
             results = DeepFace.represent(
                 img_path=img_arr,
                 model_name=FACE_MODEL_NAME,
-                detector_backend=backend,
-                enforce_detection=True,
+                detector_backend="skip",
+                enforce_detection=False,
             )
-            print(f"[AI_ARCFACE_MODEL_LOAD_SUCCESS] model={FACE_MODEL_NAME} detector={backend}")
-            print(f"[AI_ARCFACE_INFERENCE_SUCCESS] detector={backend}")
+            print(f"[AI_ARCFACE_MODEL_LOAD_SUCCESS] model={FACE_MODEL_NAME} detector=skip")
+            print(f"[AI_ARCFACE_INFERENCE_SUCCESS] detector=skip")
             if results:
                 embedding = results[0].get("embedding")
                 if embedding is not None:
                     print(f"[AI_ARCFACE_INFERENCE_RESULT] embedding_generated=true dimensions={len(embedding)}")
-                    return embedding, backend
-            last_error = RuntimeError(f"no embedding returned from {backend}")
+                    return embedding, "skip"
+            last_error = RuntimeError(f"no embedding returned from skip detector")
         except Exception as exc:
             last_error = exc
-            print(f"[AI_ARCFACE_MODEL_LOAD_ERROR] model={FACE_MODEL_NAME} detector={backend} error={str(exc)}")
-            print(f"[AI_ARCFACE_INFERENCE_ERROR] detector={backend} error={str(exc)}")
+            print(f"[AI_ARCFACE_MODEL_LOAD_ERROR] model={FACE_MODEL_NAME} detector=skip error={str(exc)}")
+            print(f"[AI_ARCFACE_INFERENCE_ERROR] detector=skip error={str(exc)}")
             import traceback
-            print(f"[AI_ARCFACE_INFERENCE_TRACEBACK] detector={backend}\n{traceback.format_exc()}")
+            print(f"[AI_ARCFACE_INFERENCE_TRACEBACK] detector=skip\n{traceback.format_exc()}")
+    else:
+        # Original behavior: try detector backends
+        for backend in _DETECTOR_BACKENDS:
+            try:
+                print(f"[AI_ARCFACE_MODEL_LOAD_START] model={FACE_MODEL_NAME} detector={backend}")
+                print(f"[AI_ARCFACE_INFERENCE_START] detector={backend}")
+                results = DeepFace.represent(
+                    img_path=img_arr,
+                    model_name=FACE_MODEL_NAME,
+                    detector_backend=backend,
+                    enforce_detection=True,
+                )
+                print(f"[AI_ARCFACE_MODEL_LOAD_SUCCESS] model={FACE_MODEL_NAME} detector={backend}")
+                print(f"[AI_ARCFACE_INFERENCE_SUCCESS] detector={backend}")
+                if results:
+                    embedding = results[0].get("embedding")
+                    if embedding is not None:
+                        print(f"[AI_ARCFACE_INFERENCE_RESULT] embedding_generated=true dimensions={len(embedding)}")
+                        return embedding, backend
+                last_error = RuntimeError(f"no embedding returned from {backend}")
+            except Exception as exc:
+                last_error = exc
+                print(f"[AI_ARCFACE_MODEL_LOAD_ERROR] model={FACE_MODEL_NAME} detector={backend} error={str(exc)}")
+                print(f"[AI_ARCFACE_INFERENCE_ERROR] detector={backend} error={str(exc)}")
+                import traceback
+                print(f"[AI_ARCFACE_INFERENCE_TRACEBACK] detector={backend}\n{traceback.format_exc()}")
 
     if last_error is not None:
         print(f"❌ Face detection failed: {last_error}")
@@ -207,21 +238,22 @@ def _try_represent(DeepFace, image_input: str | np.ndarray):
 # ──────────────────────────────────────────────
 # Face Encoding
 # ──────────────────────────────────────────────
-def get_face_encoding(image_input: str | np.ndarray) -> str | None:
+def get_face_encoding(image_input: str | np.ndarray, use_pre_cropped_face: bool = False) -> str | None:
     """
     Detect faces in an image and return the facial encoding as a JSON string.
 
     Args:
         image_input: Path to the image file or a numpy array
+        use_pre_cropped_face: If True, skip face detection and use detector_backend='skip'
 
     Returns:
         JSON string of the face embedding, or None if no face detected
     """
     try:
-        print(f"[AI_EMBEDDING] Starting face encoding process")
+        print(f"[AI_EMBEDDING] Starting face encoding process use_pre_cropped_face={use_pre_cropped_face}")
         DeepFace = _get_deepface()
         print(f"[AI_EMBEDDING] DeepFace module loaded")
-        embedding, _ = _try_represent(DeepFace, image_input)
+        embedding, _ = _try_represent(DeepFace, image_input, use_pre_cropped_face)
         if embedding is None:
             print(f"[AI_EMBEDDING] No face detected in image")
             return None

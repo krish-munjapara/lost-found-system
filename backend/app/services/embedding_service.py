@@ -253,10 +253,19 @@ def assess_image_quality(image_input: str | np.ndarray) -> dict[str, Any]:
             }
 
         print(f"[QUALITY] Final score: 1.0, status: good")
+        
+        # If we have exactly one valid face, include the crop for embedding generation
+        face_crop_result = None
+        if len(valid_faces) == 1:
+            x, y, w, h = valid_faces[0]
+            face_crop_result = image[y:y+h, x:x+w]
+            print(f"[QUALITY] Including face crop for embedding: {w}x{h}")
+        
         return {
             "status": "good",
             "face_quality_score": 1.0,
             "reasons": [],
+            "face_crop": face_crop_result,
         }
     except Exception as exc:
         print(f"[QUALITY] Exception: {exc}")
@@ -292,12 +301,12 @@ def _parse_object_id(value: Any) -> ObjectId | None:
     return None
 
 
-async def generate_embedding_for_image(image_input: str | np.ndarray) -> list[float] | None:
+async def generate_embedding_for_image(image_input: str | np.ndarray, use_pre_cropped_face: bool = False) -> list[float] | None:
     """Generate a face embedding for an image using the existing DeepFace implementation."""
-    print(f"[AI_EMBEDDING_GENERATE] starting")
+    print(f"[AI_EMBEDDING_GENERATE] starting use_pre_cropped_face={use_pre_cropped_face}")
     
     # Run blocking DeepFace operations in a thread to avoid blocking the event loop
-    raw_embedding = await asyncio.to_thread(get_face_encoding, image_input)
+    raw_embedding = await asyncio.to_thread(get_face_encoding, image_input, use_pre_cropped_face)
     
     if raw_embedding is None:
         print(f"[AI_EMBEDDING_ERROR] face_encoding_returned_none")
@@ -559,12 +568,24 @@ async def create_embedding_record_for_report(
     # PHASE: ArcFace input diagnostics
     print(f"[ARC_FACE_INPUT]")
     print(f"reached_arcface=true")
-    if isinstance(image_input, np.ndarray):
-        print(f"image_shape={image_input.shape}")
+    
+    # Use face crop from quality assessment if available (avoids duplicate detection)
+    face_crop = quality.get("face_crop")
+    if face_crop is not None:
+        print(f"[AI_FACE_CROP_START] using_pre_cropped_face=true")
+        print(f"[AI_FACE_CROP_SUCCESS] crop_shape={face_crop.shape}")
+        embedding_input = face_crop
     else:
-        print(f"image_type={type(image_input)}")
+        print(f"[AI_FACE_CROP_START] using_pre_cropped_face=false")
+        print(f"[AI_FACE_CROP_START] using_full_image=true")
+        embedding_input = image_input
+    
+    if isinstance(embedding_input, np.ndarray):
+        print(f"image_shape={embedding_input.shape}")
+    else:
+        print(f"image_type={type(embedding_input)}")
 
-    embedding = await generate_embedding_for_image(image_input)
+    embedding = await generate_embedding_for_image(embedding_input, use_pre_cropped_face=(face_crop is not None))
     
     # PHASE: ArcFace result diagnostics
     print(f"[ARC_FACE_RESULT]")
