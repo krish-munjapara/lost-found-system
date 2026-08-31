@@ -160,28 +160,44 @@ def load_image_from_url_or_path(image_input: str | np.ndarray) -> np.ndarray | N
 
 def _try_represent(DeepFace, image_input: str | np.ndarray):
     """Try RetinaFace first and fall back to OpenCV without raising."""
+    import os
+    import sys
+    
+    print(f"[AI_ARCFACE_INFERENCE_START] pid={os.getpid()} thread={threading.current_thread().name}")
+    
     img_arr = load_image_from_url_or_path(image_input)
     if img_arr is None:
         print("❌ Image loading failed, cannot represent")
         return None, None
+    
+    if img_arr is not None:
+        print(f"[AI_ARCFACE_INFERENCE_DIAGNOSTICS] image_shape={img_arr.shape}")
 
     last_error = None
     for backend in _DETECTOR_BACKENDS:
         try:
+            print(f"[AI_ARCFACE_MODEL_LOAD_START] model={FACE_MODEL_NAME} detector={backend}")
+            print(f"[AI_ARCFACE_INFERENCE_START] detector={backend}")
             results = DeepFace.represent(
                 img_path=img_arr,
                 model_name=FACE_MODEL_NAME,
                 detector_backend=backend,
                 enforce_detection=True,
             )
+            print(f"[AI_ARCFACE_MODEL_LOAD_SUCCESS] model={FACE_MODEL_NAME} detector={backend}")
+            print(f"[AI_ARCFACE_INFERENCE_SUCCESS] detector={backend}")
             if results:
                 embedding = results[0].get("embedding")
                 if embedding is not None:
+                    print(f"[AI_ARCFACE_INFERENCE_RESULT] embedding_generated=true dimensions={len(embedding)}")
                     return embedding, backend
             last_error = RuntimeError(f"no embedding returned from {backend}")
         except Exception as exc:
             last_error = exc
-            print(f"⚠️ Face detection with {backend} failed: {exc}")
+            print(f"[AI_ARCFACE_MODEL_LOAD_ERROR] model={FACE_MODEL_NAME} detector={backend} error={str(exc)}")
+            print(f"[AI_ARCFACE_INFERENCE_ERROR] detector={backend} error={str(exc)}")
+            import traceback
+            print(f"[AI_ARCFACE_INFERENCE_TRACEBACK] detector={backend}\n{traceback.format_exc()}")
 
     if last_error is not None:
         print(f"❌ Face detection failed: {last_error}")
